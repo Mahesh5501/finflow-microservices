@@ -1,23 +1,31 @@
 # FinFlow microservices
 
-Local shared dependencies: MySQL, Redis, Kafka via root `docker-compose.yml`.
+One Compose file (`docker-compose.yml`), project name **finflow**, shared network `finflow-net`.
 
-| Container | Host port | Credentials / notes |
-|-----------|-----------|---------------------|
-| `mysql` | `3307` | `root` / `root` · DBs created by services: `wallet`, `identity`, `commerce`, `notification` |
+| Container | Host port | Notes |
+|-----------|-----------|--------|
+| `mysql` | `3307` | `root` / `root` · inside Docker: `mysql:3306` |
 | `redis` | `6379` | no password (local only) |
-| `kafka` | `9092` | KRaft single-node · topic `commerce.events` |
+| `kafka` | `9092` | KRaft single-node |
+| `wallet-service` | `18082` | only with `--profile apps` |
 
-## Run infra
+## Run
 
 ```bash
+# infra only (mysql, redis, kafka)
 docker compose up -d
+
+# infra + wallet (and later other profile: apps services)
+docker compose --profile apps up -d --build
+
 docker compose ps
 ```
 
-Stop (keep data):
+Stop:
 
 ```bash
+docker compose --profile apps down   # stops everything including wallet
+# or without profile — stops only currently running infra containers if apps not started that way
 docker compose down
 ```
 
@@ -26,6 +34,8 @@ Wipe data volumes:
 ```bash
 docker compose down -v
 ```
+
+Change the Desktop group name via top-level `name: finflow` in the compose file.
 
 ## Services (ports)
 
@@ -36,6 +46,22 @@ docker compose down -v
 | wallet-service | `18082` |
 | commerce-service | `18083` |
 | notification-service | `18084` |
+
+## Service Docker images
+
+Each service has a multi-stage `Dockerfile` (Maven + JDK 21 → Temurin JRE 21).
+
+```bash
+# from a service folder, e.g. wallet-service
+docker build -t finflow/wallet-service .
+docker run --rm -p 18082:18082 \
+  -e SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3307/wallet \
+  -e SPRING_DATASOURCE_USERNAME=root \
+  -e SPRING_DATASOURCE_PASSWORD=root \
+  finflow/wallet-service
+```
+
+Same pattern for the others (`finflow/api-gateway`, `finflow/identity-service`, …). Start root `docker compose` first so MySQL/Redis/Kafka are up. Override hostnames with env vars when containers talk to each other (e.g. `mysql` instead of `host.docker.internal`).
 
 ## Redis model (intentional)
 
