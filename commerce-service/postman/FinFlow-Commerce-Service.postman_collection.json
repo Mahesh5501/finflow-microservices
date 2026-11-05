@@ -1,0 +1,559 @@
+{
+  "info": {
+    "_postman_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+    "name": "FinFlow \u2014 Commerce Service",
+    "description": "Select environment **FinFlow Local**.\n\nPrereqs (Identity + Wallet):\n1. Identity: Register \u2192 Verify \u2192 Login \u2192 Create Org \u2192 Login again\n2. Wallet: Create wallet \u2192 Deposit (checkout debits wallet when payment.provider=wallet)\n3. {{orgId}} set from Identity Create Org\n\nHappy path: Catalogue \u2192 Cart checkout **or** Orders direct \u2192 Fulfilment \u2192 Returns\n\n{{commerceBaseUrl}} = http://localhost:18083\npaymentOutcome is only for payment.provider=simulated. With wallet provider omit it / null and keep wallet funded.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "commerceBaseUrl",
+      "value": "http://localhost:18083"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "orgId",
+      "value": ""
+    },
+    {
+      "key": "categoryId",
+      "value": ""
+    },
+    {
+      "key": "productId",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": ""
+    },
+    {
+      "key": "returnId",
+      "value": ""
+    },
+    {
+      "key": "couponCode",
+      "value": "SAVE10"
+    },
+    {
+      "key": "orderKey",
+      "value": "order-demo-001"
+    },
+    {
+      "key": "checkoutKey",
+      "value": "checkout-demo-001"
+    }
+  ],
+  "item": [
+    {
+      "name": "Catalogue",
+      "item": [
+        {
+          "name": "1. Create Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/categories",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": {{orgId}},\n  \"name\": \"Electronics\",\n  \"slug\": \"electronics\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.categoryId != null) { pm.collectionVariables.set('categoryId', String(body.categoryId)); pm.environment.set('categoryId', String(body.categoryId)); }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. List Categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/categories?organisationId={{orgId}}"
+          }
+        },
+        {
+          "name": "3. Create Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/products",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": {{orgId}},\n  \"name\": \"Demo Laptop\",\n  \"unitPrice\": \"999.00\",\n  \"availableQuantity\": 25,\n  \"categoryId\": {{categoryId}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.productId != null) { pm.collectionVariables.set('productId', String(body.productId)); pm.environment.set('productId', String(body.productId)); }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. List Products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/products?organisationId={{orgId}}"
+          }
+        },
+        {
+          "name": "5. Search Products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/products/search?organisationId={{orgId}}&q=Laptop&categoryId={{categoryId}}&page=0&size=20"
+          }
+        },
+        {
+          "name": "6. Update Product (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/products/{{productId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"unitPrice\": \"949.00\",\n  \"availableQuantity\": 20\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Coupons",
+      "item": [
+        {
+          "name": "1. Create Coupon",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/coupons",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": {{orgId}},\n  \"code\": \"{{couponCode}}\",\n  \"percentOff\": \"10.00\",\n  \"expiresAt\": null\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cart",
+      "description": "Add \u2192 checkout creates PAID/PENDING order (depends on payment provider).",
+      "item": [
+        {
+          "name": "1. Get Cart",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/carts?organisationId={{orgId}}"
+          }
+        },
+        {
+          "name": "2. Add Item",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/carts/items",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": {{orgId}},\n  \"productId\": {{productId}},\n  \"quantity\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "3. Upsert Item Qty",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/carts/items/{{productId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": {{orgId}},\n  \"quantity\": 2\n}"
+            }
+          }
+        },
+        {
+          "name": "4. Checkout Cart",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{checkoutKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/carts/checkout",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": {{orgId}},\n  \"shippingAddress\": {\n  \"line1\": \"10 FinFlow Street\",\n  \"line2\": \"Suite 2\",\n  \"city\": \"London\",\n  \"state\": \"ENG\",\n  \"postalCode\": \"EC1A1BB\",\n  \"country\": \"GB\"\n},\n  \"couponCode\": \"{{couponCode}}\",\n  \"paymentOutcome\": null\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.orderId != null) { pm.collectionVariables.set('orderId', String(body.orderId)); pm.environment.set('orderId', String(body.orderId)); }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5. Remove Item",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/carts/items/{{productId}}?organisationId={{orgId}}"
+          }
+        },
+        {
+          "name": "6. Clear Cart",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/carts?organisationId={{orgId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "description": "Direct place-order path (no cart). Use a fresh Idempotency-Key each new order.",
+      "item": [
+        {
+          "name": "1. Create Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{orderKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/orders",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": {{orgId}},\n  \"items\": [\n    { \"productId\": {{productId}}, \"quantity\": 1 }\n  ],\n  \"shippingAddress\": {\n  \"line1\": \"10 FinFlow Street\",\n  \"line2\": \"Suite 2\",\n  \"city\": \"London\",\n  \"state\": \"ENG\",\n  \"postalCode\": \"EC1A1BB\",\n  \"country\": \"GB\"\n},\n  \"couponCode\": null,\n  \"paymentOutcome\": null\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.orderId != null) { pm.collectionVariables.set('orderId', String(body.orderId)); pm.environment.set('orderId', String(body.orderId)); }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. List Orders (mine)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/orders?organisationId={{orgId}}&mineOnly=true"
+          }
+        },
+        {
+          "name": "3. Get Order",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}"
+          }
+        },
+        {
+          "name": "4. Pay Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}/pay"
+          }
+        },
+        {
+          "name": "5. Cancel Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}/cancel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Fulfilment",
+      "item": [
+        {
+          "name": "1. Start Fulfilment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}/fulfilment/start"
+          }
+        },
+        {
+          "name": "2. Complete Fulfilment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}/fulfilment/complete"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Returns",
+      "item": [
+        {
+          "name": "1. Request Return",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}/returns",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Damaged on arrival\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.returnId != null) { pm.collectionVariables.set('returnId', String(body.returnId)); pm.environment.set('returnId', String(body.returnId)); }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. List Returns for Order",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}/returns"
+          }
+        },
+        {
+          "name": "3. Approve Return",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/returns/{{returnId}}/approve"
+          }
+        },
+        {
+          "name": "4. Reject Return",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/returns/{{returnId}}/reject"
+          }
+        },
+        {
+          "name": "5. Complete Return (refund)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/returns/{{returnId}}/complete"
+          }
+        }
+      ]
+    }
+  ]
+}

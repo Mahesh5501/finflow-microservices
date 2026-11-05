@@ -1,0 +1,32 @@
+package com.finflow.commerce.controller;
+
+import com.finflow.commerce.dto.CouponRequest;
+import com.finflow.commerce.dto.CouponResponse;
+import com.finflow.commerce.security.AuthenticatedUser;
+import com.finflow.commerce.service.CommerceService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/v1/coupons")
+public class CouponController {
+
+    private final CommerceService commerceService;
+
+    public CouponController(CommerceService commerceService) {
+        this.commerceService = commerceService;
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public CouponResponse create(@Valid @RequestBody CouponRequest request, Authentication authentication) {
+        AuthenticatedUser user = (AuthenticatedUser) authentication.getPrincipal();
+        return commerceService.createCoupon(user.orgIds(), request);
+    }
+}

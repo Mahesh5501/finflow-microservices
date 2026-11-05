@@ -1,0 +1,33 @@
+{
+  "info": {
+    "_postman_id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+    "name": "FinFlow \u2014 Notification Service",
+    "description": "Select environment **FinFlow Local**.\n\nInbox is always for the JWT subject (`/me`) \u2014 never pass a userId.\nEvents land via Kafka from commerce (order paid / fulfilled / etc.). With Kafka down, commerce still works; inbox stays empty until events flow.\n\n{{notificationBaseUrl}} = http://localhost:18084",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "notificationBaseUrl",
+      "value": "http://localhost:18084"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. List My Notifications",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": "{{notificationBaseUrl}}/api/v1/notifications/me"
+      }
+    }
+  ]
+}

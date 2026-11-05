@@ -1,0 +1,168 @@
+{
+  "info": {
+    "_postman_id": "d4e5f6a7-b8c9-0123-def0-234567890123",
+    "name": "FinFlow \u2014 API Gateway",
+    "description": "Select environment **FinFlow Local**.\n\nSame paths as services, via {{gatewayBaseUrl}} = http://localhost:18080.\nRequires Redis (rate limit) + Identity JWKS for protected routes.\n\nUse for edge smoke tests; deep flows stay in service collections.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "gatewayBaseUrl",
+      "value": "http://localhost:18080"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "orgId",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Public / Identity",
+      "item": [
+        {
+          "name": "1. JWKS via Gateway",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayBaseUrl}}/.well-known/jwks.json"
+          }
+        },
+        {
+          "name": "2. Me (profile)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{gatewayBaseUrl}}/api/v1/users/me"
+          }
+        },
+        {
+          "name": "3. List My Orgs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{gatewayBaseUrl}}/api/v1/orgs"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Wallet via Gateway",
+      "item": [
+        {
+          "name": "1. Wallet by User",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{gatewayBaseUrl}}/api/v1/users/{{userId}}/wallet"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Commerce via Gateway",
+      "item": [
+        {
+          "name": "1. List Products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{gatewayBaseUrl}}/api/v1/products?organisationId={{orgId}}"
+          }
+        },
+        {
+          "name": "2. List Categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{gatewayBaseUrl}}/api/v1/categories?organisationId={{orgId}}"
+          }
+        },
+        {
+          "name": "3. Get Cart",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{gatewayBaseUrl}}/api/v1/carts?organisationId={{orgId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notification via Gateway",
+      "item": [
+        {
+          "name": "1. My Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{gatewayBaseUrl}}/api/v1/notifications/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Observability",
+      "item": [
+        {
+          "name": "1. Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayBaseUrl}}/actuator/health"
+          }
+        },
+        {
+          "name": "2. Prometheus",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayBaseUrl}}/actuator/prometheus"
+          }
+        }
+      ]
+    }
+  ]
+}

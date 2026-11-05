@@ -1,0 +1,370 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "FinFlow \u2014 Wallet Service",
+    "description": "Select environment **FinFlow Local** (shared with Identity).\n\nRequires Identity first:\nRegister \u2192 Verify \u2192 Login \u2192 Create Org \u2192 **1b. Login again**\n(for transfer: invite flow through **7b** so {{accessToken2}} has wallets:write)\n\nAll money/read APIs send: Authorization: Bearer {{accessToken}}\nURLs use {{walletBaseUrl}} = http://localhost:18082",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "walletBaseUrl",
+      "value": "http://localhost:18082"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "accessToken2",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "walletId",
+      "value": ""
+    },
+    {
+      "key": "walletId2",
+      "value": ""
+    },
+    {
+      "key": "transferId",
+      "value": ""
+    },
+    {
+      "key": "depositKey",
+      "value": "deposit-demo-001"
+    },
+    {
+      "key": "withdrawKey",
+      "value": "withdraw-demo-001"
+    },
+    {
+      "key": "transferKey",
+      "value": "transfer-demo-001"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Create Wallet A",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "  const body = pm.response.json();",
+              "  if (body.walletId != null) { pm.collectionVariables.set('walletId', String(body.walletId)); pm.environment.set('walletId', String(body.walletId)); }",
+              "  if (body.userId != null) { pm.collectionVariables.set('userId', String(body.userId)); pm.environment.set('userId', String(body.userId)); }",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"currency\": \"INR\"\n}"
+        },
+        "url": "{{walletBaseUrl}}/api/v1/wallets"
+      }
+    },
+    {
+      "name": "2. Create Wallet B (accessToken2)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "  const body = pm.response.json();",
+              "  if (body.walletId != null) { pm.collectionVariables.set('walletId2', String(body.walletId)); pm.environment.set('walletId2', String(body.walletId)); }",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken2}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"currency\": \"INR\"\n}"
+        },
+        "url": "{{walletBaseUrl}}/api/v1/wallets"
+      }
+    },
+    {
+      "name": "3. Get Wallet A",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}"
+      }
+    },
+    {
+      "name": "3b. Get Wallet by User (self)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": "{{walletBaseUrl}}/api/v1/users/{{userId}}/wallet"
+      }
+    },
+    {
+      "name": "4. Deposit A",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{depositKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": \"100.00\"\n}"
+        },
+        "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/deposits"
+      }
+    },
+    {
+      "name": "5. Transfer A \u2192 B",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const body = pm.response.json();",
+              "  if (body.transferId != null) { pm.collectionVariables.set('transferId', String(body.transferId)); pm.environment.set('transferId', String(body.transferId)); }",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{transferKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fromWalletId\": {{walletId}},\n  \"toWalletId\": {{walletId2}},\n  \"amount\": \"25.00\"\n}"
+        },
+        "url": "{{walletBaseUrl}}/api/v1/transfers"
+      }
+    },
+    {
+      "name": "5b. Get Transfer",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": "{{walletBaseUrl}}/api/v1/transfers/{{transferId}}"
+      }
+    },
+    {
+      "name": "6. Withdraw A",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{withdrawKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": \"10.00\"\n}"
+        },
+        "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/withdrawals"
+      }
+    },
+    {
+      "name": "7. Get Transactions A",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/transactions"
+      }
+    },
+    {
+      "name": "8. Block A",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/block"
+      }
+    },
+    {
+      "name": "9. Unblock A",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/unblock"
+      }
+    },
+    {
+      "name": "Negative cases",
+      "item": [
+        {
+          "name": "No token (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}"
+          }
+        },
+        {
+          "name": "Invalid currency (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"XYZ\"\n}"
+            },
+            "url": "{{walletBaseUrl}}/api/v1/wallets"
+          }
+        },
+        {
+          "name": "Insufficient balance (422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "withdraw-too-much-001"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": \"999999.00\"\n}"
+            },
+            "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/withdrawals"
+          }
+        },
+        {
+          "name": "Missing Idempotency-Key (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": \"10.00\"\n}"
+            },
+            "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/deposits"
+          }
+        }
+      ]
+    }
+  ]
+}

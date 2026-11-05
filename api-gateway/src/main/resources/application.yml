@@ -1,0 +1,167 @@
+# Production-style gateway: routes + circuit breaker + rate limit + retry(GET only)
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          default-filters:
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
+            - name: RequestSize
+              args:
+                maxSize: 1MB
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@rateLimitKeyResolver}"
+                rate-limiter: "#{@rateLimiter}"
+                deny-empty-key: false
+          httpclient:
+            connect-timeout: ${app.http.connect-timeout-ms}
+            response-timeout: ${app.http.response-timeout-ms}ms
+          routes:
+            - id: identity-me
+              uri: ${identity.uri}
+              predicates:
+                - Path=/api/v1/users/me
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: identityCb
+                    fallbackUri: forward:/fallback/identity
+                - name: Retry
+                  args:
+                    retries: 2
+                    methods: GET
+                    statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,SERVICE_UNAVAILABLE
+                    backoff:
+                      firstBackoff: 50ms
+                      maxBackoff: 200ms
+                      factor: 2
+
+            - id: wallet-by-user
+              uri: ${wallet.uri}
+              predicates:
+                - Path=/api/v1/users/*/wallet
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: walletCb
+                    fallbackUri: forward:/fallback/wallet
+                - name: Retry
+                  args:
+                    retries: 2
+                    methods: GET
+                    statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,SERVICE_UNAVAILABLE
+                    backoff:
+                      firstBackoff: 50ms
+                      maxBackoff: 200ms
+                      factor: 2
+
+            - id: identity
+              uri: ${identity.uri}
+              predicates:
+                - Path=/api/v1/auth/**,/api/v1/orgs/**,/.well-known/jwks.json
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: identityCb
+                    fallbackUri: forward:/fallback/identity
+                # Retry only safe GETs (login/register must NOT be retried by gateway)
+                - name: Retry
+                  args:
+                    retries: 2
+                    methods: GET
+                    statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,SERVICE_UNAVAILABLE
+                    backoff:
+                      firstBackoff: 50ms
+                      maxBackoff: 200ms
+                      factor: 2
+
+            - id: wallet
+              uri: ${wallet.uri}
+              predicates:
+                - Path=/api/v1/wallets/**,/api/v1/transfers/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: walletCb
+                    fallbackUri: forward:/fallback/wallet
+                - name: Retry
+                  args:
+                    retries: 2
+                    methods: GET
+                    statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,SERVICE_UNAVAILABLE
+                    backoff:
+                      firstBackoff: 50ms
+                      maxBackoff: 200ms
+                      factor: 2
+
+            - id: commerce
+              uri: ${commerce.uri}
+              predicates:
+                - Path=/api/v1/products/**,/api/v1/orders/**,/api/v1/carts/**,/api/v1/coupons/**,/api/v1/returns/**,/api/v1/categories/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: commerceCb
+                    fallbackUri: forward:/fallback/commerce
+                - name: Retry
+                  args:
+                    retries: 2
+                    methods: GET
+                    statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,SERVICE_UNAVAILABLE
+                    backoff:
+                      firstBackoff: 50ms
+                      maxBackoff: 200ms
+                      factor: 2
+
+            - id: notification
+              uri: ${notification.uri}
+              predicates:
+                - Path=/api/v1/notifications/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: notificationCb
+                    fallbackUri: forward:/fallback/notification
+                - name: Retry
+                  args:
+                    retries: 2
+                    methods: GET
+                    statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,SERVICE_UNAVAILABLE
+                    backoff:
+                      firstBackoff: 50ms
+                      maxBackoff: 200ms
+                      factor: 2
+
+# Resilience4j — open circuit when downstream is unhealthy
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        slidingWindowSize: 20
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 5
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+    instances:
+      identityCb:
+        baseConfig: default
+      walletCb:
+        baseConfig: default
+      commerceCb:
+        baseConfig: default
+      notificationCb:
+        baseConfig: default
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 5s
+    instances:
+      identityCb:
+        baseConfig: default
+      walletCb:
+        baseConfig: default
+      commerceCb:
+        baseConfig: default
+      notificationCb:
+        baseConfig: default
