@@ -317,7 +317,7 @@ flowchart TB
 | Notification worker | Deliver notifications from events | Notification records |
 | Message broker | Optional async bus | Topics (e.g. `transaction.completed`, `order.confirmed`) |
 
-FinFlow in this deployment is the **wallet + transfer + ledger** capability. In the current repository that maps primarily to `wallet-service` + `transaction-service` behaviour — whether those stay as two processes or one FinFlow process is a later service-depth decision.
+FinFlow in this deployment is the **wallet + transfer + ledger** capability. In the current repository that maps to `wallet-service` (balances, transfers, history in one process).
 
 ---
 

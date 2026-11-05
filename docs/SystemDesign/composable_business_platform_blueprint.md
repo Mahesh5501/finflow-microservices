@@ -894,7 +894,6 @@ finflow-microservices/
 ├── api-gateway/
 ├── identity-service/
 ├── wallet-service/             # Existing name may be retained if appropriate
-├── transaction-service/
 ├── notification-service/
 ├── commerce-service/            # Future, if requirements justify it
 ├── booking-service/             # Future, if requirements justify it

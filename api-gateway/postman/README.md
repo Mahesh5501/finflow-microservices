@@ -29,7 +29,7 @@ Deep money & catalogue flows live in the service collections (`walletBaseUrl`, `
 
 ```bash
 cd infrastructure && docker compose up -d   # MySQL :3307 + Redis :6379 (+ Kafka)
-# Identity 18081, Wallet 18082, Commerce 18083, Notification 18084, Transaction 18085, Gateway 18080
+# Identity 18081, Wallet 18082, Commerce 18083, Notification 18084, Gateway 18080
 ```
 
 Call via `http://localhost:18080/...` with Bearer token.

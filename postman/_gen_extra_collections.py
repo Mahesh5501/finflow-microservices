@@ -297,87 +297,6 @@ def commerce_collection() -> dict:
     }
 
 
-def transaction_collection() -> dict:
-    return {
-        "info": {
-            "_postman_id": "e5f6a7b8-c9d0-1234-ef01-345678901234",
-            "name": "FinFlow — Transaction Service",
-            "description": (
-                "Select environment **FinFlow Local**.\n\n"
-                "Ledger orchestration over wallet balances (saga transfer).\n"
-                "Prereqs: Identity login with wallets:* + Wallet Create A (/B for transfer).\n\n"
-                "{{transactionBaseUrl}} = http://localhost:18085\n"
-                "Change Idempotency-Key vars for each new money move."
-            ),
-            "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-        },
-        "variable": [
-            {"key": "transactionBaseUrl", "value": "http://localhost:18085"},
-            {"key": "accessToken", "value": ""},
-            {"key": "walletId", "value": ""},
-            {"key": "walletId2", "value": ""},
-            {"key": "transactionId", "value": ""},
-            {"key": "txDepositKey", "value": "tx-deposit-001"},
-            {"key": "txWithdrawKey", "value": "tx-withdraw-001"},
-            {"key": "txTransferKey", "value": "tx-transfer-001"},
-        ],
-        "item": [
-            {
-                "name": "Money moves",
-                "item": [
-                    named(
-                        "1. Deposit",
-                        "POST",
-                        "{{transactionBaseUrl}}/api/v1/transactions/deposits",
-                        auth() + idem("txDepositKey") + json_ct(),
-                        '{\n  "walletId": {{walletId}},\n  "amount": "100.00"\n}',
-                        save_id("transactionId", "transactionId"),
-                    ),
-                    named(
-                        "2. Transfer (saga)",
-                        "POST",
-                        "{{transactionBaseUrl}}/api/v1/transfers",
-                        auth() + idem("txTransferKey") + json_ct(),
-                        '{\n  "sourceWalletId": {{walletId}},\n  "destinationWalletId": {{walletId2}},\n  "amount": "25.00"\n}',
-                        save_id("transactionId", "transactionId"),
-                    ),
-                    named(
-                        "3. Withdraw",
-                        "POST",
-                        "{{transactionBaseUrl}}/api/v1/transactions/withdrawals",
-                        auth() + idem("txWithdrawKey") + json_ct(),
-                        '{\n  "walletId": {{walletId}},\n  "amount": "10.00"\n}',
-                        save_id("transactionId", "transactionId"),
-                    ),
-                ],
-            },
-            {
-                "name": "History / ledger",
-                "item": [
-                    named(
-                        "1. Get Transaction",
-                        "GET",
-                        "{{transactionBaseUrl}}/api/v1/transactions/{{transactionId}}",
-                        auth(),
-                    ),
-                    named(
-                        "2. History by Wallet",
-                        "GET",
-                        "{{transactionBaseUrl}}/api/v1/transactions?walletId={{walletId}}",
-                        auth(),
-                    ),
-                    named(
-                        "3. Ledger Balance (reconcile)",
-                        "GET",
-                        "{{transactionBaseUrl}}/api/v1/transactions/wallets/{{walletId}}/ledger-balance",
-                        auth(),
-                    ),
-                ],
-            },
-        ],
-    }
-
-
 def notification_collection() -> dict:
     return {
         "info": {
@@ -497,17 +416,6 @@ def gateway_collection() -> dict:
                 ],
             },
             {
-                "name": "Transaction via Gateway",
-                "item": [
-                    named(
-                        "1. History by Wallet",
-                        "GET",
-                        "{{gatewayBaseUrl}}/api/v1/transactions?walletId={{walletId}}",
-                        auth(),
-                    ),
-                ],
-            },
-            {
                 "name": "Observability",
                 "item": [
                     named(
@@ -535,19 +443,25 @@ def update_environment() -> None:
     extras = [
         ("commerceBaseUrl", "http://localhost:18083", "default"),
         ("notificationBaseUrl", "http://localhost:18084", "default"),
-        ("transactionBaseUrl", "http://localhost:18085", "default"),
         ("categoryId", "", "default"),
         ("productId", "", "default"),
         ("orderId", "", "default"),
         ("returnId", "", "default"),
-        ("transactionId", "", "default"),
         ("couponCode", "SAVE10", "default"),
         ("orderKey", "order-demo-001", "default"),
         ("checkoutKey", "checkout-demo-001", "default"),
-        ("txDepositKey", "tx-deposit-001", "default"),
-        ("txWithdrawKey", "tx-withdraw-001", "default"),
-        ("txTransferKey", "tx-transfer-001", "default"),
     ]
+    # Drop vars that belonged to removed transaction-service
+    for drop in (
+        "transactionBaseUrl",
+        "transactionId",
+        "txDepositKey",
+        "txWithdrawKey",
+        "txTransferKey",
+    ):
+        if drop in by_key:
+            values[:] = [v for v in values if v["key"] != drop]
+            by_key.pop(drop, None)
     for key, value, typ in extras:
         if key in by_key:
             by_key[key]["value"] = value
@@ -562,7 +476,6 @@ def update_environment() -> None:
         "walletBaseUrl",
         "commerceBaseUrl",
         "notificationBaseUrl",
-        "transactionBaseUrl",
     ]
     rest = [v for v in values if v["key"] not in preferred]
     ordered = []
@@ -587,10 +500,6 @@ def main() -> None:
     write(
         ROOT / "notification-service/postman/FinFlow-Notification-Service.postman_collection.json",
         notification_collection(),
-    )
-    write(
-        ROOT / "transaction-service/postman/FinFlow-Transaction-Service.postman_collection.json",
-        transaction_collection(),
     )
     write(
         ROOT / "api-gateway/postman/FinFlow-API-Gateway.postman_collection.json",

@@ -148,24 +148,6 @@
       ]
     },
     {
-      "name": "Transaction via Gateway",
-      "item": [
-        {
-          "name": "1. History by Wallet",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}"
-              }
-            ],
-            "url": "{{gatewayBaseUrl}}/api/v1/transactions?walletId={{walletId}}"
-          }
-        }
-      ]
-    },
-    {
       "name": "Observability",
       "item": [
         {

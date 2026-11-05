@@ -10,7 +10,6 @@ java -version 2>&1 | head -1
 # wallet-service        → 18082
 # commerce-service      → 18083
 # notification-service  → 18084
-# transaction-service   → 18085
 #
 # Shared Docker infra (from /infrastructure):
 #   docker compose up -d

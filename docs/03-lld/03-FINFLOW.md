@@ -1,7 +1,7 @@
 # 3. FinFlow — Complete Design
 
 **Capability:** Simulated wallets, transfers, ledger, transaction history  
-**Processes (current repo mapping):** `wallet-service` (:8082) + `transaction-service` (:8083)  
+**Processes (current repo mapping):** `wallet-service` (:18082) — wallets, transfers, balance history  
 **Logical ownership:** One FinFlow domain — one `finflow_db` (or schemas under FinFlow ownership)  
 **Invariants:** Decimal money · Ledger nets to zero · Idempotent retries · No silent ledger edits
 
@@ -50,8 +50,8 @@ com.finflow.wallet / com.finflow.transaction
   infrastructure.messaging
 ```
 
-Preferred long-term: **one FinFlow application** owning wallet + transfer + ledger in one local transaction.  
-If kept as two processes: Transaction orchestrates; Wallet owns balance; transfer uses saga + compensating credit.
+Preferred: **one FinFlow application** (`wallet-service`) owning wallet + transfer + ledger in one local transaction.  
+A separate orchestrator process is optional interview depth — not required for the platform to work.
 
 ---
 
