@@ -1,13 +1,3 @@
-# Secrets / local env
-finflow-env.sh
-.env
-.env.*
-!.env.example
-**/application-local.yml
-**/application-local.properties
-**/application-secret*.yml
-**/application-secret*.properties
-
 # Build
 **/target/
 **/build/
@@ -33,7 +23,3 @@ Thumbs.db
 *.log
 **/__pycache__/
 *.pyc
-
-# Local Postman env (may contain tokens)
-postman/*environment*.json
-**/postman/*environment*.json
