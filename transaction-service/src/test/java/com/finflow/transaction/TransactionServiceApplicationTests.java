@@ -1,4 +1,4 @@
-package com.finflow.transactionservice;
+package com.finflow.transaction;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -9,5 +9,4 @@ class TransactionServiceApplicationTests {
     @Test
     void contextLoads() {
     }
-
 }

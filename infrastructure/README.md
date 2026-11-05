@@ -4,7 +4,7 @@ Shared local dependencies for all services.
 
 | Container | Host port | Credentials / notes |
 |-----------|-----------|---------------------|
-| `mysql` | `3307` | `root` / `root` · DBs created by services: `wallet`, `identity`, `commerce`, `notification` |
+| `mysql` | `3307` | `root` / `root` · DBs created by services: `wallet`, `identity`, `commerce`, `notification`, `transaction` |
 | `redis` | `6379` | no password (local only) |
 | `kafka` | `9092` | KRaft single-node · topic `commerce.events` |
 

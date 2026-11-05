@@ -21,6 +21,10 @@
     {
       "key": "userId",
       "value": ""
+    },
+    {
+      "key": "walletId",
+      "value": ""
     }
   ],
   "item": [
@@ -139,6 +143,24 @@
               }
             ],
             "url": "{{gatewayBaseUrl}}/api/v1/notifications/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transaction via Gateway",
+      "item": [
+        {
+          "name": "1. History by Wallet",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{gatewayBaseUrl}}/api/v1/transactions?walletId={{walletId}}"
           }
         }
       ]

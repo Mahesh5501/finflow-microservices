@@ -133,6 +133,25 @@ spring:
                       maxBackoff: 200ms
                       factor: 2
 
+            - id: transaction
+              uri: ${transaction.uri}
+              predicates:
+                - Path=/api/v1/transactions/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: transactionCb
+                    fallbackUri: forward:/fallback/transaction
+                - name: Retry
+                  args:
+                    retries: 2
+                    methods: GET
+                    statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,SERVICE_UNAVAILABLE
+                    backoff:
+                      firstBackoff: 50ms
+                      maxBackoff: 200ms
+                      factor: 2
+
 # Resilience4j — open circuit when downstream is unhealthy
 resilience4j:
   circuitbreaker:
@@ -152,6 +171,8 @@ resilience4j:
         baseConfig: default
       notificationCb:
         baseConfig: default
+      transactionCb:
+        baseConfig: default
   timelimiter:
     configs:
       default:
@@ -164,4 +185,6 @@ resilience4j:
       commerceCb:
         baseConfig: default
       notificationCb:
+        baseConfig: default
+      transactionCb:
         baseConfig: default

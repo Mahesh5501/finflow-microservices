@@ -7,7 +7,8 @@
 3. `wallet-service/postman/FinFlow-Wallet-Service.postman_collection.json`
 4. `commerce-service/postman/FinFlow-Commerce-Service.postman_collection.json`
 5. `notification-service/postman/FinFlow-Notification-Service.postman_collection.json`
-6. `api-gateway/postman/FinFlow-API-Gateway.postman_collection.json` (edge smoke)
+6. `transaction-service/postman/FinFlow-Transaction-Service.postman_collection.json`
+7. `api-gateway/postman/FinFlow-API-Gateway.postman_collection.json` (edge smoke)
 
 Delete old copies first if Postman still has stale URLs/headers.
 
@@ -20,6 +21,7 @@ Delete old copies first if Postman still has stale URLs/headers.
 | `walletBaseUrl` | `http://localhost:18082` |
 | `commerceBaseUrl` | `http://localhost:18083` |
 | `notificationBaseUrl` | `http://localhost:18084` |
+| `transactionBaseUrl` | `http://localhost:18085` |
 | `accessToken` | User A JWT (Identity Login / 1b) |
 | `accessToken2` | User B JWT (Member Login 7b) |
 | `userId` / `userId2` | From login responses |
@@ -48,6 +50,10 @@ Delete old copies first if Postman still has stale URLs/headers.
 **Notification**
 
 1. List My Notifications (after commerce events + Kafka)
+
+**Transaction**
+
+1. Deposit → Transfer saga → Withdraw → history / ledger-balance
 
 **Gateway**
 
