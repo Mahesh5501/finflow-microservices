@@ -8,7 +8,7 @@ Port: **18080** · env: `gatewayBaseUrl`
 |--------|------|
 | Routing | Spring Cloud Gateway (WebFlux) |
 | Auth | OAuth2 Resource Server + identity JWKS |
-| Rate limit | **Redis** (shared docker — start infrastructure compose first) |
+| Rate limit | **Redis** (shared docker — start root `docker compose` first) |
 | Resilience | Resilience4j circuit breaker + fallback JSON |
 | Retry | GET only (never POST money/auth) |
 | Timeouts | Connect + response timeouts |
@@ -28,7 +28,7 @@ Deep money & catalogue flows live in the service collections (`walletBaseUrl`, `
 ## Local run
 
 ```bash
-cd infrastructure && docker compose up -d   # MySQL :3307 + Redis :6379 (+ Kafka)
+docker compose up -d   # from repo root — MySQL :3307 + Redis :6379 (+ Kafka)
 # Identity 18081, Wallet 18082, Commerce 18083, Notification 18084, Gateway 18080
 ```
 

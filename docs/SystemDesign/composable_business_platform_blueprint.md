@@ -898,9 +898,6 @@ finflow-microservices/
 ├── commerce-service/            # Future, if requirements justify it
 ├── booking-service/             # Future, if requirements justify it
 ├── integration-service/         # Future, if requirements justify it
-├── infrastructure/
-│   ├── local/
-│   └── deployment/              # Added when justified
 ├── docs/
 │   ├── product/
 │   ├── architecture/
@@ -908,7 +905,7 @@ finflow-microservices/
 │   ├── api/
 │   ├── operations/
 │   └── learning/
-├── compose.yaml                  # Actual location to verify
+├── docker-compose.yml
 └── README.md
 ```
 

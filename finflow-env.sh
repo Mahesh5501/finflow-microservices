@@ -11,7 +11,7 @@ java -version 2>&1 | head -1
 # commerce-service      → 18083
 # notification-service  → 18084
 #
-# Shared Docker infra (from /infrastructure):
+# Shared Docker infra (repo root docker-compose.yml):
 #   docker compose up -d
 #   containers: mysql (:3307 root/root), redis (:6379), kafka (:9092)
 
