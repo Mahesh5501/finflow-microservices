@@ -1,8 +1,15 @@
 # FinFlow project status
 
-Last assessed: **2026-11-07 (Asia/Calcutta)**. Source baseline: Git commit `5d79a90` (`commit`); initial tracked working tree clean. This assessment changes documentation only.
+Last assessed: **2026-11-07 (Asia/Calcutta)**.
 
-## Latest progress checkpoint - 2026-11-07 (gateway YAML readability)
+## Latest progress checkpoint - 2026-11-07 (identity cleanup)
+
+- **Last active/affected service:** identity-service. Approved low-risk cleanup: removed Spring Initializr `HELP.md` (already gitignored), removed overlapping tracked `IDENTITY_SERVICE_OVERVIEW.md`, folded a short stack/login diagram and role-permission table into `README.md` as the single service doc. `spring-boot-devtools` was briefly removed then **restored** so local IDE recompiles trigger automatic process restart; still optional/runtime, not a production feature. No endpoints, schema, claims, security behaviour or application Java removed.
+- **Important files:** identity-service/README.md, identity-service/pom.xml; deleted IDENTITY_SERVICE_OVERVIEW.md and local HELP.md; this status. Other services untouched.
+- **Verification:** From identity-service, Temurin Java 21 `mvn -B -o -DskipTests compile` → BUILD SUCCESS after the docs/devtools-removal edit. DevTools restore is the same optional dependency previously present; full suite/packaging not rerun. Historical 51-test success and packaging cloud-provider failure remain prior evidence.
+- **Baseline/next:** Started at HEAD `100c8b8` with a clean tree. No staging/commit by this task. Next identity recommendation remains real mail delivery and production token secrecy; packaging OneDrive issue stays separate. Gateway GW1–GW10 and commerce/wallet R1/R2 remain open elsewhere.
+
+## Previous checkpoint - 2026-11-07 (gateway YAML readability)
 
 - **Last active/affected service:** api-gateway. Simplified current YAML presentation for learning/interviews: one dotted spring.cloud.gateway.server.webflux prefix reduces indentation; preserved the user's top-level retry-template approach; expanded inline argument/instance maps; added concise reading-order comments and route/filter explanations. All six route IDs/order/predicates/destinations and default/CircuitBreaker/Retry ordering/policy values retained. No Java refactor/dependency/endpoint/schema changes in this task; existing Java responsibilities are explained in the README.
 - **Important files:** api-gateway/src/main/resources/application.yml and api-gateway/README.md (short interview answer, reading map, Java responsibilities, common follow-ups and honest limits); this status. Task began at HEAD 4fc0567 with a clean tree: the user's prior compact YAML edit and earlier cleanup were already committed. Old prefix spring.cloud.gateway was migrated to the current server.webflux prefix while retaining effective settings; no unrelated edits were overwritten.

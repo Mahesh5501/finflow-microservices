@@ -1,4 +1,35 @@
-# Identity service: API purpose and simplification review
+# Identity service
+
+Single service doc for FinFlow identity (API review, security behaviour, signing-key setup). Stack: Java 21, Spring Boot 3.5.6, Security, JPA/MySQL, Redis rate limits, JJWT RS256. Auth is JWT-based (no server sessions); organisation permissions come from `Membership` roles embedded in access-token claims.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant AuthController
+    participant AuthService
+    participant JwtService
+    participant DB
+
+    Note over User, DB: Login
+    User->>AuthController: POST /auth/login
+    AuthController->>AuthService: login(email, password)
+    AuthService->>DB: Load user / verify BCrypt
+    AuthService->>JwtService: createAccessToken
+    AuthService->>DB: Persist hashed refresh token
+    AuthService-->>User: access JWT + refresh token
+
+    Note over User, DB: Authenticated call
+    User->>AuthController: GET /api/v1/users/me (Bearer)
+    Note right of AuthController: JwtAuthFilter sets SecurityContext
+    AuthController->>AuthService: getMe(userId)
+    AuthService-->>User: UserProfileResponse
+```
+
+| Role | Permissions in JWT (union across active memberships) |
+|---|---|
+| ORG_ADMIN | `org:manage`, `members:manage`, `wallets:read`, `wallets:write`, `transfers:create` |
+| FINANCE_OPERATOR | `wallets:read`, `wallets:write`, `transfers:create` |
+| MEMBER | `wallets:read` |
 
 Reviewed 2026-11-07 starting at HEAD d878dd7 plus the existing working tree; final Git HEAD is d499559 after an external gateway commit. The API inventory is a source-based review; the first security-response improvement below is now implemented. This does not establish production readiness. Gateway work is preserved. No endpoints have been removed or renamed.
 

@@ -1,17 +1,17 @@
 ---
 name: code-change-verification
-description: Verify an approved FinFlow feature or fix after implementation, or when asked to check changes; report targeted compilation, tests and diff results without requiring a command.
+description: Automatically verify meaningful FinFlow changes with exact-source review and targeted tests, then record factual results and remaining work without requiring a command.
 ---
 
 # Code change verification
 
 Apply after approved implementation or a natural request to verify changes; $code-change-verification is optional. Verification does not authorize additional significant repairs or configuration/dependency changes. Keep one logical task focused; summarize actual results in simple English.
 
-1. Read root AGENTS.md and relevant service status/nested instructions. Review Git status, scoped staged/unstaged diffs and relevant untracked files to identify affected services and API/event consumers. Preserve unrelated changes.
-2. Inspect only changed code and relevant tests/build dependencies; follow CodeGraph first when tracing implementation. Select Java 21 per process (system Java may be 8), preserving global settings.
-3. Run targeted compilation/tests first from affected service directories: mvn -B -DskipTests compile for main compilation, and mvn -B -Dtest=RelevantTest test for relevant tests. Choose actual existing test names; report zero tests/skips as such. There is no root reactor; -o requires cached dependencies.
-4. For cross-service contracts verify directly affected producers/consumers and document untested integrations. Broaden to the affected service suite or mvn -B verify only when change scope, failures or unresolved concerns justify it. Existing H2/simulator/mock-HTTP checks do not prove MySQL concurrency, security filters or live Kafka/wallet operation.
-5. Review final scoped diff and Git status for unintended changes. Report exact commands, exit/results, service names, skipped/not-run checks and environmental blockers; compilation alone is not test success.
-6. Record meaningful task verification in PROJECT_STATUS.md overall/affected-service sections under the root progress rule, or supply this evidence to the ongoing task/save-progress checkpoint without duplicate updates.
+1. Read root AGENTS.md and relevant service status/nested instructions. Identify affected services, exact changed files and direct API/event consumers from the task/session. Review their actual content and preserve unrelated changes. Use a scoped Git inspection only when it helps establish change boundaries or investigate unexpected edits; never substitute Git output for source.
+2. Review the exact changed classes/methods/configuration, relevant tests and dependencies for implementation correctness and obvious regressions; follow CodeGraph first when tracing implementation. Select Java 21 per process (system Java may be 8), preserving global settings.
+3. Automatically run targeted tests from the affected service directory, e.g. mvn -B -Dtest=RelevantTest test. That invocation already compiles main/test code; a separate compile is needed only for a specific diagnostic purpose or when tests cannot be run. Choose relevant existing/new tests; report zero tests/skips and compile-only checks accurately. There is no root reactor; -o requires cached dependencies.
+4. For cross-service contracts verify directly affected producers/consumers and document untested integrations. Broaden to the affected service suite or mvn -B verify only when change scope, failures or unresolved concerns justify it. Inspect actual test scope: H2/simulator/mock-HTTP success does not prove live MySQL/Redis/Kafka or cross-service behavior; security coverage depends on whether the actual filter chain is exercised. Reuse passed results unless changes, failures or unresolved concerns justify another run.
+5. Review the exact final files for unintended edits; a Git diff is optional when it adds useful review evidence. Report commands, actual exit/results, affected services, skipped/not-run checks and environmental blockers; compilation alone is not test success.
+6. After meaningful work is completed and verified, immediately update PROJECT_STATUS.md overall/affected-service entries with progress, important files, tests/results, remaining work and next task. If blocked, record partial progress/failure instead. Do not wait for save-progress. Update architecture/decisions only when materially necessary; update an existing skill only for an established reusable workflow improvement, not task progress.
 
 Do not disable tests or alter application/build settings just to pass. No container lifecycle/data reset or dependency installation as an incidental check. Use required approvals for sandbox failures. Stop at unresolved failures with evidence; never claim success without verification.
