@@ -43,23 +43,11 @@ public class SecurityConfig {
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
                 .authorizeExchange(ex -> ex
-
-                        // Browser CORS preflight requests are public.
-                        .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-
-                        // Health endpoints remain publicly accessible.
-                        .pathMatchers(
-                                "/actuator/health",
-                                "/actuator/health/**").permitAll()
-
-                        // Gateway fallback endpoints remain public.
-                        .pathMatchers("/fallback/**").permitAll()
-
-                        // Public JWKS endpoint.
-                        .pathMatchers(HttpMethod.GET, "/.well-known/jwks.json").permitAll()
-
-                        // Public authentication and onboarding endpoints.
-                        .pathMatchers(HttpMethod.POST,
+                        .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()  // Browser CORS preflight requests are public.
+                        .pathMatchers("/actuator/health", "/actuator/health/**").permitAll() // Health endpoints remain publicly accessible.
+                        .pathMatchers("/fallback/**").permitAll() // Gateway fallback endpoints remain public.
+                        .pathMatchers(HttpMethod.GET, "/.well-known/jwks.json").permitAll() // Public JWKS endpoint.
+                        .pathMatchers(HttpMethod.POST, // Public authentication and onboarding endpoints.
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/verify-email",
                                 "/api/v1/auth/resend-verification",
@@ -69,25 +57,16 @@ public class SecurityConfig {
                                 "/api/v1/auth/forgot-password",
                                 "/api/v1/auth/reset-password"
                         ).permitAll()
-
-                        // All other API endpoints require authentication.
-                        .pathMatchers("/api/v1/**").authenticated()
-
-                        // Other actuator endpoints are not publicly accessible.
-                        .pathMatchers("/actuator/**").denyAll()
-
-                        // Deny every route not explicitly covered above.
-                        .anyExchange().denyAll()
+                        .pathMatchers("/api/v1/**").authenticated()  // All other API endpoints require authentication.
+                        .pathMatchers("/actuator/**").denyAll() // Other actuator endpoints are not publicly accessible.
+                        .anyExchange().denyAll() // Deny every route not explicitly covered above.
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
-                        // Signature/timestamp verification is delegated to Spring Security.
-                        .jwt(Customizer.withDefaults())
-                        .authenticationEntryPoint(authenticationFailureHandler())
-                )
+                        .jwt(Customizer.withDefaults()) // Signature/timestamp verification is delegated to Spring Security.
+                        .authenticationEntryPoint(authenticationFailureHandler()))
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(authenticationFailureHandler())
-                        .accessDeniedHandler(accessDeniedHandler())
-                );
+                        .accessDeniedHandler(accessDeniedHandler()));
         return http.build();
     }
 
@@ -97,8 +76,7 @@ public class SecurityConfig {
                 exchange.getResponse(),
                 HttpStatus.UNAUTHORIZED,
                 "UNAUTHORIZED",
-                "Valid Bearer access token required"
-        );
+                "Valid Bearer access token required");
     }
 
     /** 403: an authenticated request is not permitted by the security rules. */
@@ -107,8 +85,7 @@ public class SecurityConfig {
                 exchange.getResponse(),
                 HttpStatus.FORBIDDEN,
                 "FORBIDDEN",
-                "Access denied"
-        );
+                "Access denied");
     }
 
     private Mono<Void> writeJson(ServerHttpResponse response, HttpStatus status, String code, String message) {
@@ -126,8 +103,7 @@ public class SecurityConfig {
             DataBuffer buffer = response.bufferFactory().wrap(bytes);
             return response.writeWith(Mono.just(buffer));
         } catch (JsonProcessingException e) {
-            byte[] bytes = ("{\"code\":\"" + code + "\",\"message\":\"" + message + "\"}")
-                    .getBytes(StandardCharsets.UTF_8);
+            byte[] bytes = ("{\"code\":\"" + code + "\",\"message\":\"" + message + "\"}").getBytes(StandardCharsets.UTF_8);
             return response.writeWith(Mono.just(response.bufferFactory().wrap(bytes)));
         }
     }

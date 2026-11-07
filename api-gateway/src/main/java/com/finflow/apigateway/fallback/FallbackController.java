@@ -13,13 +13,8 @@ import java.util.Map;
 
 /**
  * Handles circuit-breaker forwards to /fallback/{service}.
- *
- * Returns a consistent JSON 503 response when a downstream service
- * is unavailable. This response does not guarantee that a timed-out
- * downstream write operation was not committed.
- *
- * The controller is intentionally service-agnostic. New gateway services
- * can reuse this fallback without requiring changes here.
+ * Returns a consistent JSON 503 response when a downstream service is unavailable. This response does not guarantee that a timed-out downstream write operation was not committed.
+ * The controller is intentionally service-agnostic. New gateway services can reuse this fallback without requiring changes here.
  */
 @RestController
 public class FallbackController {
