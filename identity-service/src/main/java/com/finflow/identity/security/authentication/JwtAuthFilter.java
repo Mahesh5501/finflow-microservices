@@ -1,5 +1,6 @@
-package com.finflow.identity.security;
+package com.finflow.identity.security.authentication;
 
+import com.finflow.identity.security.jwt.JwtService;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

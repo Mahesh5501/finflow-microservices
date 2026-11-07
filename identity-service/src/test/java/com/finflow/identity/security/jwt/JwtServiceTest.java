@@ -1,11 +1,10 @@
-package com.finflow.identity.security;
+package com.finflow.identity.security.jwt;
 
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.SignatureException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import java.math.BigInteger;
@@ -153,19 +152,19 @@ class JwtServiceTest {
     }
 
     @Test
-    void prodProfileRefusesToGenerateAMissingKey() {
-        Path file = directory.resolve("prod-missing.pk8");
-        prodContext(file).run(context -> {
+    void requiredKeyConfigurationRefusesToGenerateAMissingKey() {
+        Path file = directory.resolve("required-missing.pk8");
+        requiredKeyContext(file).run(context -> {
             assertTrue(context.getStartupFailure() != null);
             assertFalse(Files.exists(file));
         });
     }
 
     @Test
-    void prodProfileLoadsProvisionedKey() {
-        Path file = directory.resolve("prod-mounted.pk8");
+    void requiredKeyConfigurationLoadsProvisionedKey() {
+        Path file = directory.resolve("provided.pk8");
         JwtService provisioned = service(file, true);
-        prodContext(file).run(context -> {
+        requiredKeyContext(file).run(context -> {
             assertEquals(null, context.getStartupFailure());
             JwtService loaded = context.getBean(JwtService.class);
             assertEquals(provisioned.jwks(), loaded.jwks());
@@ -173,10 +172,10 @@ class JwtServiceTest {
         });
     }
 
-    private ApplicationContextRunner prodContext(Path file) {
+    private ApplicationContextRunner requiredKeyContext(Path file) {
         return new ApplicationContextRunner()
-                .withInitializer(new ConfigDataApplicationContextInitializer())
-                .withPropertyValues("spring.profiles.active=prod", "IDENTITY_SIGNING_KEY_PATH=" + file)
+                .withPropertyValues("jwt.access-expiration-ms=900000", "jwt.signing-key-path=" + file,
+                        "jwt.generate-key-if-missing=false")
                 .withUserConfiguration(JwtService.class);
     }
 

@@ -1,4 +1,4 @@
-package com.finflow.identity.security;
+package com.finflow.identity.security.jwt;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;

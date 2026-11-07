@@ -16,7 +16,7 @@ import com.finflow.identity.repository.MembershipRepository;
 import com.finflow.identity.repository.OrgInviteTokenRepository;
 import com.finflow.identity.repository.OrgRepository;
 import com.finflow.identity.repository.UserRepository;
-import com.finflow.identity.security.TokenCrypto;
+import com.finflow.identity.security.token.TokenCrypto;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

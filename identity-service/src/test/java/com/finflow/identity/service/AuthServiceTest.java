@@ -7,7 +7,7 @@ import com.finflow.identity.dto.response.RegisterResponse;
 import com.finflow.identity.dto.response.UserProfileResponse;
 import com.finflow.identity.entity.OrgRole;
 import com.finflow.identity.exception.ApiException;
-import com.finflow.identity.security.JwtService;
+import com.finflow.identity.security.jwt.JwtService;
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

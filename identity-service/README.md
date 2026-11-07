@@ -33,6 +33,28 @@ sequenceDiagram
 
 Reviewed 2026-11-07 starting at HEAD d878dd7 plus the existing working tree; final Git HEAD is d499559 after an external gateway commit. The API inventory is a source-based review; the first security-response improvement below is now implemented. This does not establish production readiness. Gateway work is preserved. No endpoints have been removed or renamed.
 
+## Security folder: where to find each responsibility
+
+The classes remain separate and are grouped by purpose:
+
+```text
+security/
+  SecurityConfig.java                 Public/protected paths and filter-chain wiring
+  authentication/
+    AuthenticatedUser.java            Identity of the current caller
+    JwtAuthFilter.java                Read/validate bearer JWT and set the caller
+  jwt/
+    JwtService.java                   Issue/verify access JWTs and publish JWKS
+    SigningKeyStore.java              Load the persistent signing key
+  ratelimit/
+    RateLimitFilter.java              Apply limits to selected auth endpoints
+    RateLimitService.java             Check the Redis request counter
+  token/
+    TokenCrypto.java                  Generate/hash opaque refresh/reset/verify/invite tokens
+```
+
+Read SecurityConfig first, then follow the responsibility you need. For login, AuthService uses jwt/JwtService and token/TokenCrypto. For an authenticated request, authentication/JwtAuthFilter uses JwtService and builds AuthenticatedUser. Rate-limit filter/service stay together; SigningKeyStore stays package-private beside JwtService. Tests mirror the grouping: security/jwt/JwtServiceTest covers key/token behavior; security/SecurityHttpTest covers the complete security/MVC flow. Package moves changed imports only, without changing endpoint or security behavior.
+
 ## What the service does
 
 Identity owns accounts, email verification, passwords, access/refresh tokens, organisations, memberships and identity audit records. Three controllers expose **20 application operations**, excluding Actuator. These are distinct flows, not 20 duplicate login APIs.
@@ -144,7 +166,16 @@ After setting the path, restart identity normally. Log in **once after this upgr
 
 ### Production deployment
 
-Activate `SPRING_PROFILES_ACTIVE=prod` and set `IDENTITY_SIGNING_KEY_PATH` to an **absolute path** on a protected durable secret mount. The prod profile requires the path and sets `jwt.generate-key-if-missing=false`; no missing-key fallback is generated. Provision the RSA private key before startup and protect it with the deployment's secret/ACL controls. Binary PKCS#8 DER is supported; PEM text, encrypted PKCS#8, JKS and PKCS#12 containers are not accepted by this loader. Choose RSA >=2048 bits. A previously bootstrapped local-format key can be securely provisioned to the mount, but do not distribute development keys to production.
+There is no separate application-prod.properties file. The base application.properties remains the single runtime configuration file. Local startup can still create a missing key once and reuse it afterward.
+
+For a deployment that must require a provisioned key, explicitly set:
+
+```text
+IDENTITY_SIGNING_KEY_PATH=<absolute path to a protected signing-key.pk8>
+IDENTITY_GENERATE_KEY_IF_MISSING=false
+```
+
+Activating a profile named prod alone no longer applies signing-key safeguards. Without the explicit override, the base configuration permits missing-key generation. Provision the key before startup and protect it with deployment secret/ACL controls. Binary PKCS#8 DER is supported; PEM text, encrypted PKCS#8, JKS and PKCS#12 containers are not accepted. Choose RSA >=2048 bits. Do not distribute development keys to production.
 
 Existing key loading needs only read access and creates no lock or temporary files. All identity replicas in the same deployment must use the same provisioned key. This is file-backed signing, not a managed key service, automatic rotation or a proven HA deployment. Protecting and backing up the mounted secret remains an operational responsibility.
 
@@ -158,6 +189,6 @@ Gateway and the three business services still fetch the same public JWKS URL. Th
 
 ### Verification
 
-JwtServiceTest covers persisted-byte/JWKS/kid stability, two independent JVMs issuing then verifying a token, RSA public JWKS verification, malformed/non-RSA/weak/missing keys, no silent replacement, existing read-only-load path, expiry, different-key rejection and bootstrap-lock contention. Production-profile tests exercise missing-key failure and provisioned-key loading. Spring tests use isolated temporary key paths, never the developer's key file. Existing HTTP/auth/org suites are also rerun; final counts/build limits are in PROJECT_STATUS.md.
+JwtServiceTest covers persisted-byte/JWKS/kid stability, two independent JVMs issuing then verifying a token, RSA public JWKS verification, malformed/non-RSA/weak/missing keys, no silent replacement, existing read-only-load path, expiry, different-key rejection and bootstrap-lock contention. Explicit required-key configuration tests exercise missing-key failure and provisioned-key loading without a profile-specific file. Spring tests use isolated temporary key paths, never the developer's key file. Existing HTTP/auth/org suites are also rerun; final counts/build limits are in PROJECT_STATUS.md.
 
 Implementation references: [Java PKCS#8 key specification](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/security/spec/PKCS8EncodedKeySpec.html), [Java file-channel locking](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/channels/FileChannel.html). Atomic publication and key-file layout are project implementation choices.

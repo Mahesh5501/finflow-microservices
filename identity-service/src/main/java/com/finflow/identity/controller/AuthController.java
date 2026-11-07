@@ -11,7 +11,7 @@ import com.finflow.identity.dto.response.AuthenticationResponse;
 import com.finflow.identity.dto.response.DevTokenResponse;
 import com.finflow.identity.dto.response.RegisterResponse;
 import com.finflow.identity.dto.response.UserProfileResponse;
-import com.finflow.identity.security.AuthenticatedUser;
+import com.finflow.identity.security.authentication.AuthenticatedUser;
 import com.finflow.identity.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;

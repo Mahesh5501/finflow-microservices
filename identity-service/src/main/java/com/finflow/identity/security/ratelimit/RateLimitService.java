@@ -1,4 +1,4 @@
-package com.finflow.identity.security;
+package com.finflow.identity.security.ratelimit;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;

@@ -1,4 +1,4 @@
-package com.finflow.identity.security;
+package com.finflow.identity.security.token;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

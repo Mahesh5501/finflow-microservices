@@ -1,4 +1,4 @@
-package com.finflow.identity.security;
+package com.finflow.identity.security.ratelimit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finflow.identity.exception.ApiException;

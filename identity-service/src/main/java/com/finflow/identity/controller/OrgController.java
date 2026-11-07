@@ -8,7 +8,7 @@ import com.finflow.identity.dto.response.AuditLogResponse;
 import com.finflow.identity.dto.response.InviteMemberResponse;
 import com.finflow.identity.dto.response.OrgMemberResponse;
 import com.finflow.identity.dto.response.OrgResponse;
-import com.finflow.identity.security.AuthenticatedUser;
+import com.finflow.identity.security.authentication.AuthenticatedUser;
 import com.finflow.identity.service.OrgService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
