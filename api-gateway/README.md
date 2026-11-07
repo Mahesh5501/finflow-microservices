@@ -4,6 +4,72 @@ This guide explains the existing gateway in simple English. Pending production-r
 
 Current assessment: useful for local development and learning, **not ready for public production deployment**. Read the [detailed review](../docs/GATEWAY_REVIEW.md) for file-by-file findings and dated verification. This README reuses that review; writing it did not rerun the application or tests.
 
+## A short explanation for interviews
+
+> "FinFlow's API gateway is the entry point for four backend services. It uses Spring Cloud Gateway with WebFlux. Spring Security validates access JWTs using identity-service's public JWKS. Path-based routes forward requests to the right service. Shared filters apply request-size checks and Redis rate limits; each service has a circuit breaker and GET-only retries. The business services still enforce permissions, ownership and transactions."
+
+Use a wallet example to explain the flow:
+
+```text
+GET /api/v1/wallets/7 + Bearer token
+  -> Gateway authenticates the token
+  -> Wallet path matches wallet.uri
+  -> Route filters add a correlation ID and check traffic limits
+  -> Circuit breaker wraps GET retries and forwarding
+  -> Wallet verifies permission + ownership and returns the result
+```
+
+An interview answer should describe both the implementation and its limits. Redis currently fails open, the size filter checks declared Content-Length rather than fully bounding streamed bytes, and management access still needs hardening. This gateway is a working foundation, not a fully verified production deployment.
+
+### How to read the YAML
+
+The file now has four clear sections. The long key `spring.cloud.gateway.server.webflux` is written on one line to keep indentation shallow; it represents the same Spring property hierarchy as separate nested keys. This is the current WebFlux prefix, replacing the legacy `spring.cloud.gateway` prefix in the preceding edit. Actual loaded settings were compared before and after.
+
+| Section | Plain-English meaning |
+|---|---|
+| `x-shared-filters: &getRetry` | Define the GET retry template once. This top-level YAML helper is not itself a Spring route or an executing filter. |
+| `default-filters` | Add these filters to every matched route. |
+| `httpclient` | Set how long the gateway waits to connect and receive responses. Values come from application.properties. |
+| `routes` | Select a destination by request path, then configure that route's fallback/retry behavior. |
+| `resilience4j` | Configure each downstream's breaker and operation time limit. |
+
+`&getRetry` means "name this configuration"; `*getRetry` means "reuse it here." All six routes reuse the template. It does not create another retry layer. `args` is a normal expanded key/value block, so each setting can be read on its own line.
+
+Read a route as five questions:
+
+1. `id`: what do we call this rule?
+2. `uri`: which backend receives the request?
+3. `predicates`: which request path selects it?
+4. `CircuitBreaker`: which service's failure tracker and fallback apply?
+5. `*getRetry`: may this GET operation be attempted again?
+
+The two `/users` routes need separate destinations: `/users/me` belongs to identity; `/users/{userId}/wallet` belongs to wallet. Route order and filter order are preserved. CircuitBreaker stays before Retry because it wraps the downstream retry operation. Retry remains outside default-filters to preserve that order.
+
+### Explain the Java without memorising every line
+
+Read the source in this order:
+
+1. `ApiGatewayApplication`: starts Spring Boot and discovers components.
+2. `SecurityConfig`: chooses public/protected paths, validates JWTs and formats security failures.
+3. `GatewayConfig` + `GatewayProperties`: turn configured CORS/rate settings into typed objects and a browser CORS filter. HTTP route definitions stay in YAML.
+4. `RateLimitConfig`: choose the authenticated subject, otherwise the socket IP, as the traffic-budget key.
+5. `CorrelationIdFilter` + `AccessLogFilter`: forward a request ID and log downstream attempts.
+6. `FallbackController` + `GlobalErrorConfig`: return a local 503 fallback or format otherwise-unhandled gateway errors. They do not rewrite every business-service response.
+
+The Java classes already have narrow responsibilities after the previous cleanup. No new controllers, routing DSL, generic managers or shared response framework were introduced for this readability task. Framework callbacks such as `filter`, bean methods and `handle` are invoked by Spring even without a direct Java caller. `Mono` represents asynchronous completion/result; our filters return the chain rather than blocking it.
+
+### Common follow-up questions
+
+- **Why a gateway?** One client-facing address and a common place for authentication and traffic policy.
+- **Why JWT and JWKS?** Identity keeps the private signing key; gateway uses its public key. Cached key lookup avoids a login call for every request.
+- **Why still secure wallet-service?** A valid identity does not prove ownership of wallet 7; wallet owns that authorization rule.
+- **Why not retry POST?** Repeating a money/auth write can repeat side effects. Idempotency and reconciliation belong to the business workflow.
+- **Does every HTTP 500 open the breaker?** No. Current breaker configuration does not explicitly register HTTP status codes as failures; exceptions/timeouts and retries must be explained separately.
+- **What happens after failure?** Configured breaker failures can forward to the service's JSON 503 fallback. That does not prove a timed-out payment never committed.
+- **What would you improve next?** Management access control, streaming limits, nested validation and explicit retry/Redis/breaker policies, with HTTP/integration tests.
+
+Readability verification: parsed retry/gateway/resilience values stayed equal after accounting for the prefix change. Before/after local startup snapshots and bound CircuitBreaker/Retry/RequestSize objects were equivalent; legacy migration only changed argument-key casing. Fresh Java21 `mvn -B -o verify` passed 15 tests and repackaged the JAR. These checks did not rerun live downstream/Redis scenarios. Property reference: [Spring Cloud Gateway 4.3 application properties](https://docs.spring.io/spring-cloud-gateway/reference/4.3/appendix.html).
+
 ## 1. What is the gateway?
 
 The gateway is the public entry point for FinFlow APIs. A client can use one address instead of knowing each service's port.
@@ -201,7 +267,7 @@ A timeout does not prove a money operation failed. Wallet may commit a debit bef
 
 ## 8. How can we keep the code simpler?
 
-**Small simplification implemented:** application.yml now defines retry settings once with the YAML anchor `&getRetry`. The other five routes use `*getRetry`, which means "reuse that same configuration here." Each reference stays after its route's CircuitBreaker. The parsed configuration was compared with the original using the packaged SnakeYAML parser and was identical; Maven verify also passed with the existing context-load test. This removes five duplicate blocks without introducing Java classes or changing retry policy.
+**Small simplification implemented:** application.yml defines retry settings once in the top-level `x-shared-filters` YAML helper with the anchor `&getRetry`. All six routes use `*getRetry`, which means "reuse that same configuration here." Each reference stays after its route's CircuitBreaker. The prefix is written as one dotted key, and route/resilience arguments use readable expanded blocks. The parsed configuration was compared with the original using the packaged SnakeYAML parser and was identical; Maven verify also passed with the existing context-load test. This removes five duplicate blocks without introducing Java classes or changing retry policy.
 
 **Java readability changes implemented:** error handling now separates JSON writing from response classification, with a switch for status-to-code mapping. The rate-limit resolver reads as "authenticated subject, otherwise peer IP"; the address lookup is a short helper. CORS settings have one local name instead of repeated chained getters. Comments explain route-only filter scope, retry-attempt logs, request mutation and the difference between 401/403. These are small internal refactors, not changes to security or traffic policy.
 

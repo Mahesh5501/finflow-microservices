@@ -1,6 +1,7 @@
-# Production-style gateway: routes + circuit breaker + rate limit + retry(GET only)
+# Read in order: retry template -> shared filters -> service routes -> failure limits.
 
-# Define shared filter policy as an anchor to reduce repetition
+# YAML helper only: &getRetry names this template; *getRetry reuses it in each route.
+# Two retries means up to three attempts. POST requests are never retried here.
 x-shared-filters: &getRetry
   name: Retry
   args:
@@ -12,80 +13,96 @@ x-shared-filters: &getRetry
       maxBackoff: 200ms
       factor: 2
 
-spring:
-  cloud:
-    gateway:
-      default-filters:
-        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
-        - name: RequestSize
+# Full Spring property prefix written on one line to avoid six levels of indentation.
+spring.cloud.gateway.server.webflux:
+  # Apply these filters to every matched service route, in this order.
+  default-filters:
+    - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
+    - name: RequestSize
+      args:
+        maxSize: 1MB
+    - name: RequestRateLimiter
+      args:
+        key-resolver: "#{@rateLimitKeyResolver}"
+        rate-limiter: "#{@rateLimiter}"
+        deny-empty-key: false
+
+  # Actual values live in application.properties; connection and response deadlines differ.
+  httpclient:
+    connect-timeout: ${app.http.connect-timeout-ms}
+    response-timeout: ${app.http.response-timeout-ms}ms
+
+  # Each route answers: which path, which service, and what to do if that service fails?
+  # Keep CircuitBreaker before Retry: the breaker wraps the downstream retry operation.
+  routes:
+    - id: identity-me
+      uri: ${identity.uri}
+      predicates:
+        - Path=/api/v1/users/me
+      filters:
+        - name: CircuitBreaker
           args:
-            maxSize: 1MB
-        - name: RequestRateLimiter
+            name: identityCb
+            fallbackUri: forward:/fallback/identity
+        - *getRetry
+
+    # This /users path belongs to wallet, unlike /users/me above.
+    - id: wallet-by-user
+      uri: ${wallet.uri}
+      predicates:
+        - Path=/api/v1/users/*/wallet
+      filters:
+        - name: CircuitBreaker
           args:
-            key-resolver: "#{@rateLimitKeyResolver}"
-            rate-limiter: "#{@rateLimiter}"
-            deny-empty-key: false
-      httpclient:
-        connect-timeout: ${app.http.connect-timeout-ms}
-        response-timeout: ${app.http.response-timeout-ms}ms
+            name: walletCb
+            fallbackUri: forward:/fallback/wallet
+        - *getRetry
 
-      # Simplified Routes
-      routes:
-        - id: identity-me
-          uri: ${identity.uri}
-          predicates:
-            - Path=/api/v1/users/me
-          filters:
-            - name: CircuitBreaker
-              args: { name: identityCb, fallbackUri: "forward:/fallback/identity" }
-            - *getRetry
+    - id: identity
+      uri: ${identity.uri}
+      predicates:
+        - Path=/api/v1/auth/**,/api/v1/orgs/**,/.well-known/jwks.json
+      filters:
+        - name: CircuitBreaker
+          args:
+            name: identityCb
+            fallbackUri: forward:/fallback/identity
+        - *getRetry
 
-        - id: wallet-by-user
-          uri: ${wallet.uri}
-          predicates:
-            - Path=/api/v1/users/*/wallet
-          filters:
-            - name: CircuitBreaker
-              args: { name: walletCb, fallbackUri: "forward:/fallback/wallet" }
-            - *getRetry
+    - id: wallet
+      uri: ${wallet.uri}
+      predicates:
+        - Path=/api/v1/wallets/**,/api/v1/transfers/**
+      filters:
+        - name: CircuitBreaker
+          args:
+            name: walletCb
+            fallbackUri: forward:/fallback/wallet
+        - *getRetry
 
-        - id: identity
-          uri: ${identity.uri}
-          predicates:
-            - Path=/api/v1/auth/**,/api/v1/orgs/**,/.well-known/jwks.json
-          filters:
-            - name: CircuitBreaker
-              args: { name: identityCb, fallbackUri: "forward:/fallback/identity" }
-            - *getRetry
+    - id: commerce
+      uri: ${commerce.uri}
+      predicates:
+        - Path=/api/v1/products/**,/api/v1/orders/**,/api/v1/carts/**,/api/v1/coupons/**,/api/v1/returns/**,/api/v1/categories/**
+      filters:
+        - name: CircuitBreaker
+          args:
+            name: commerceCb
+            fallbackUri: forward:/fallback/commerce
+        - *getRetry
 
-        - id: wallet
-          uri: ${wallet.uri}
-          predicates:
-            - Path=/api/v1/wallets/**,/api/v1/transfers/**
-          filters:
-            - name: CircuitBreaker
-              args: { name: walletCb, fallbackUri: "forward:/fallback/wallet" }
-            - *getRetry
+    - id: notification
+      uri: ${notification.uri}
+      predicates:
+        - Path=/api/v1/notifications/**
+      filters:
+        - name: CircuitBreaker
+          args:
+            name: notificationCb
+            fallbackUri: forward:/fallback/notification
+        - *getRetry
 
-        - id: commerce
-          uri: ${commerce.uri}
-          predicates:
-            - Path=/api/v1/products/**,/api/v1/orders/**,/api/v1/carts/**,/api/v1/coupons/**,/api/v1/returns/**,/api/v1/categories/**
-          filters:
-            - name: CircuitBreaker
-              args: { name: commerceCb, fallbackUri: "forward:/fallback/commerce" }
-            - *getRetry
-
-        - id: notification
-          uri: ${notification.uri}
-          predicates:
-            - Path=/api/v1/notifications/**
-          filters:
-            - name: CircuitBreaker
-              args: { name: notificationCb, fallbackUri: "forward:/fallback/notification" }
-            - *getRetry
-
-# Resilience4j configurations remain unchanged...
+# Circuit breakers track failures independently for each downstream service.
 resilience4j:
   circuitbreaker:
     configs:
@@ -96,16 +113,26 @@ resilience4j:
         permittedNumberOfCallsInHalfOpenState: 5
         automaticTransitionFromOpenToHalfOpenEnabled: true
     instances:
-      identityCb: { baseConfig: default }
-      walletCb: { baseConfig: default }
-      commerceCb: { baseConfig: default }
-      notificationCb: { baseConfig: default }
+      identityCb:
+        baseConfig: default
+      walletCb:
+        baseConfig: default
+      commerceCb:
+        baseConfig: default
+      notificationCb:
+        baseConfig: default
+
+  # Bounds each protected asynchronous operation; not the same as the HTTP connect timeout.
   timelimiter:
     configs:
       default:
         timeoutDuration: 5s
     instances:
-      identityCb: { baseConfig: default }
-      walletCb: { baseConfig: default }
-      commerceCb: { baseConfig: default }
-      notificationCb: { baseConfig: default }
+      identityCb:
+        baseConfig: default
+      walletCb:
+        baseConfig: default
+      commerceCb:
+        baseConfig: default
+      notificationCb:
+        baseConfig: default
