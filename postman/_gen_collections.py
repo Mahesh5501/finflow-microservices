@@ -61,7 +61,7 @@ def write(path: Path, data: dict) -> None:
     print("wrote", path)
 
 
-def main() -> None:
+def main(*, identity_only=False) -> None:
     identity = {
         "info": {
             "name": "FinFlow — Identity Service",
@@ -694,7 +694,36 @@ def main() -> None:
         "item": wallet_items,
     }
 
+    # Direct identity checks: gateway may reject the request before identity sees it.
+    security_checks = []
+    for name, headers in [
+        ("Missing bearer token", []),
+        ("Malformed bearer token", [{"key": "Authorization", "value": "Bearer not-a-jwt"}]),
+    ]:
+        item = req("GET", "{{identityBaseUrl}}/api/v1/users/me", headers, tests=[
+            "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+            "pm.test('JSON response', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+            "pm.test('Authentication error', () => { const body = pm.response.json(); pm.expect(body.code).to.eql('UNAUTHORIZED'); pm.expect(body.message).to.eql('Valid Bearer access token required'); });",
+            "pm.test('Bearer challenge', () => pm.expect(pm.response.headers.get('WWW-Authenticate')).to.eql('Bearer'));",
+        ])
+        item["name"] = name
+        item["request"]["auth"] = {"type": "noauth"}
+        security_checks.append(item)
+    item = req("GET", "{{identityBaseUrl}}/.well-known/jwks.json", tests=[
+        "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+        "pm.test('Public RSA keys', () => { const keys = pm.response.json().keys; pm.expect(keys).to.be.an('array').and.not.empty; keys.forEach(key => { pm.expect(key.kty).to.eql('RSA'); pm.expect(key).not.to.have.property('d'); }); });",
+    ])
+    item["name"] = "Public JWKS without bearer token"
+    item["request"]["auth"] = {"type": "noauth"}
+    security_checks.append(item)
+    identity["item"].append({
+        "name": "Security response checks",
+        "description": "Read-only checks; no credentials or account setup needed. Run directly against identityBaseUrl (default :18081), not gatewayBaseUrl. For authenticated permission-denial checks use the HTTP regression suite with controlled H2 fixtures.",
+        "item": security_checks,
+    })
     write(ROOT / "identity-service/postman/FinFlow-Identity-Service.postman_collection.json", identity)
+    if identity_only:
+        return
     write(ROOT / "wallet-service/postman/FinFlow-Wallet-Service.postman_collection.json", wallet)
 
     # Commerce + Notification + Gateway collections + shared env extras
@@ -704,4 +733,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Regenerate FinFlow Postman collections.")
+    parser.add_argument("--identity-only", action="store_true", help="Update identity only; preserve other collections and environment.")
+    main(identity_only=parser.parse_args().identity_only)

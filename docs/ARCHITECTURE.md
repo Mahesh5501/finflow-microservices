@@ -43,11 +43,12 @@ MVC modules use controller -> service -> repository/entity layering, DTO records
 
 1. AuthController -> AuthService.register normalizes email, checks uniqueness, hashes password with BCrypt, creates unverified ACTIVE user and SHA-256 verification token, calls logging MailService, records audit. Default response exposes raw dev token.
 2. verifyEmail loads hash, checks unused/unexpired, marks user verified/token used, records audit. Login rejects inactive/wrong credentials/unverified users.
-3. Login loads ACTIVE memberships, unions their permissions, issues RS256 access JWT with sub/email/orgIds/permissions and a hashed opaque refresh token. Signing RSA 2048 key and random kid exist only in memory.
+3. Login loads ACTIVE memberships, unions their permissions, issues RS256 access JWT with sub/email/orgIds/permissions and a hashed opaque refresh token. JwtService loads a durable RSA private key through SigningKeyStore; local bootstrap creates a 2048-bit key only when absent. kid is derived from SHA-256 of the encoded public key and remains stable across restarts. The prod profile requires a provisioned key path and disables generation; corrupt keys fail startup. One public key is published; overlapping rotation is not implemented.
 4. Refresh revokes presented usable token and issues a new pair; logout revokes matching refresh hash. Reset/change password revoke all refresh tokens. Already-issued JWTs are not revoked.
 5. Any authenticated user may create an organisation; creator gets ACTIVE ORG_ADMIN membership. Existing registered users can be invited by members:manage holders; invitee must log in and accept a usable matching-email token. Identity rechecks membership permissions in its own DB for protected organisation operations.
 6. Last-admin checks protect sequential demotion/removal, not concurrent races. Re-login/refresh after org creation or invite acceptance is needed to get updated downstream claims.
 7. TokenCleanupJob uses scheduled hourly JPQL deletes for expired/revoked/used tokens. AuditService writes in local transactions; it is not a platform-wide immutable audit system.
+8. Direct identity security-filter failures use JSON code/message: missing or unusable bearer authentication on protected endpoints returns 401 with WWW-Authenticate: Bearer; authenticated Spring Security access denial returns 403. Controller/domain errors keep their own advice mapping. Public endpoints remain public even with an invalid optional token. MockMvc regressions verify these paths; live Redis and edge-to-identity behavior are separate checks.
 
 ### Wallet movement
 
@@ -169,7 +170,7 @@ JWT protects /api/v1/** except listed public POST auth routes; public JWKS/OPTIO
 ## Security, validation, errors and logging
 
 - Identity issues and verifies locally; gateway uses resource-server JWKS; wallet/commerce/notification use custom JJWT filters and cached RSA JWKS keys (300 s, refresh on unknown kid). Invalid token exceptions are swallowed to clear authentication.
-- No issuer/audience claims/checks in custom issuance/validation; keys rotate implicitly on restart. Identity-org operations use DB permissions; downstream claims may be stale.
+- No issuer/audience claims/checks in custom issuance/validation; keys now persist across restarts; file replacement still changes trust, and overlapping rotation remains unimplemented. Identity-org operations use DB permissions; downstream claims may be stale.
 - DTO records have Jakarta constraints and @Valid; coverage/consistency varies (for example price precision/create versus update). Controller method constraints and malformed JSON paths lack HTTP regressions.
 - Identity/wallet/commerce advice emits code/message and validation details; wallet/commerce handle optimistic conflicts. Wallet/commerce security send explicit JSON 401/403. Identity has no equivalent custom entry-point/error body; framework behaviour should be verified rather than copied from comments. Notification has auth JSON entry point but no domain controller advice.
 - Gateway has security JSON errors, reactive global exception mapping and fallback JSON. Filter-produced errors are not guaranteed to pass its exception handler.

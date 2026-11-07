@@ -23,3 +23,8 @@ Thumbs.db
 *.log
 **/__pycache__/
 *.pyc
+
+# Identity local signing material (working directory may be repo root or service root).
+.local/
+*.pk8
+*.pk8.lock

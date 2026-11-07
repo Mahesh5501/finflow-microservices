@@ -35,10 +35,18 @@ Assessment date: 2026-11-07. These are observations of code/configuration, **not
 4. **Payment consistency:** how to reconcile uncertain wallet outcomes before expiry/cancel; durable charge/refund intent, retries, worker authentication, state transitions and recovery ownership. Do not persist raw end-user access tokens as an incidental worker workaround.
 5. **Returns:** full versus partial returns, eligibility/window, one or multiple returns, stock/refund idempotency and resulting order status.
 6. **Money:** commerce scale 4 versus wallet scale 2, permitted currencies, order caps, discount rounding and deterministic charge/refund amounts.
-7. **Keys and sessions:** durable RSA key storage/rotation, issuer/audience, multiple identity replicas, refresh replay/reuse detection, invitation supersession and access revocation expectations.
+7. **Keys and sessions:** file-backed RSA persistence is implemented (see dated decision below); managed storage/overlapping rotation, issuer/audience, multi-replica operational provisioning, refresh replay/reuse detection, invitation supersession and access revocation expectations remain unresolved.
 8. **Delivery guarantees:** required event durability, unique event IDs/schema evolution, publication ordering, notification retry/DLT, real provider and recipient lookup. Current payload has customerUserId, not an email address.
 9. **Schema lifecycle:** initial migration baseline for existing personal databases, local/test/production profiles, dedicated DB users and explicit FK/index choices.
 10. **Runtime scope:** learning project versus deployable product; full Compose stack/listeners, secrets/TLS, trusted proxies, public metrics/CORS and CI acceptance checks.
 11. **Build reproducibility:** why wrapper distribution is 3.10.0 in four services while installed Maven 3.9.16 was used, and how to address OneDrive/plugin packaging failures without changing business code.
 
 No outcomes for these questions were inferred or implemented during this documentation assessment.
+
+## 2026-11-07: Persist identity signing keys across restarts
+
+Approved task: stop identity restarts invalidating issued JWTs. Use one binary PKCS#8 RSA private-key file, derive its matching public key and deterministic kid, and preserve existing RS256 claims/JWKS. This avoids another metadata/public-key file getting out of sync and uses existing Java/JJWT dependencies. SigningKeyStore handles loading/local bootstrap; JwtService keeps token/JWKS responsibilities.
+
+Local mode may bootstrap once, with a lock and atomic publication. Invalid existing files fail rather than implicitly rotating. The prod profile requires IDENTITY_SIGNING_KEY_PATH and disables missing-key generation, allowing read-only provisioned secret mounts. Key bytes are ignored by Git; filesystem ACLs, durable storage and secure provisioning remain deployment responsibilities. Relative local paths depend on working directory; deployment should use an absolute path. Previous in-memory keys cannot be migrated, so the first upgrade requires reauthentication.
+
+Scope deliberately excludes automated rotation/KMS integration and issuer/audience changes. One-key JWKS replacement cannot guarantee overlap for existing tokens; plan staged multi-key publication/retirement before implementing rotation. Existing consumers need no code changes for stable key/kid reuse; live multi-service restart and multi-replica guarantees remain unverified. Tests exercise independent-JVM persistence and production configuration, not a full deployment.

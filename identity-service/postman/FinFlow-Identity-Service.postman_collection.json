@@ -615,6 +615,90 @@
           }
         }
       ]
+    },
+    {
+      "name": "Security response checks",
+      "description": "Read-only checks; no credentials or account setup needed. Run directly against identityBaseUrl (default :18081), not gatewayBaseUrl. For authenticated permission-denial checks use the HTTP regression suite with controlled H2 fixtures.",
+      "item": [
+        {
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityBaseUrl}}/api/v1/users/me",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+                  "pm.test('JSON response', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Authentication error', () => { const body = pm.response.json(); pm.expect(body.code).to.eql('UNAUTHORIZED'); pm.expect(body.message).to.eql('Valid Bearer access token required'); });",
+                  "pm.test('Bearer challenge', () => pm.expect(pm.response.headers.get('WWW-Authenticate')).to.eql('Bearer'));"
+                ]
+              }
+            }
+          ],
+          "name": "Missing bearer token"
+        },
+        {
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer not-a-jwt"
+              }
+            ],
+            "url": "{{identityBaseUrl}}/api/v1/users/me",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+                  "pm.test('JSON response', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Authentication error', () => { const body = pm.response.json(); pm.expect(body.code).to.eql('UNAUTHORIZED'); pm.expect(body.message).to.eql('Valid Bearer access token required'); });",
+                  "pm.test('Bearer challenge', () => pm.expect(pm.response.headers.get('WWW-Authenticate')).to.eql('Bearer'));"
+                ]
+              }
+            }
+          ],
+          "name": "Malformed bearer token"
+        },
+        {
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityBaseUrl}}/.well-known/jwks.json",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Public RSA keys', () => { const keys = pm.response.json().keys; pm.expect(keys).to.be.an('array').and.not.empty; keys.forEach(key => { pm.expect(key.kty).to.eql('RSA'); pm.expect(key).not.to.have.property('d'); }); });"
+                ]
+              }
+            }
+          ],
+          "name": "Public JWKS without bearer token"
+        }
+      ]
     }
   ]
 }

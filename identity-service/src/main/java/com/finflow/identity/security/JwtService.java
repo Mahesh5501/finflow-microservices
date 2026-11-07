@@ -6,8 +6,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigInteger;
+import java.nio.file.Path;
 import java.security.KeyPair;
-import java.security.KeyPairGenerator;
+import java.security.MessageDigest;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
@@ -17,7 +18,6 @@ import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * RS256 access JWTs + JWKS for other FinFlow services (wallet validates via public key).
@@ -31,17 +31,21 @@ public class JwtService {
     private final String keyId;
     private final long accessExpirationMs;
 
-    public JwtService(@Value("${jwt.access-expiration-ms}") long accessExpirationMs) {
+    public JwtService(
+            @Value("${jwt.access-expiration-ms}") long accessExpirationMs,
+            @Value("${jwt.signing-key-path:.local/identity/signing-key.pk8}") String signingKeyPath,
+            @Value("${jwt.generate-key-if-missing:true}") boolean generateKeyIfMissing
+    ) {
         try {
-            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
-            generator.initialize(2048);
-            KeyPair pair = generator.generateKeyPair();
+            KeyPair pair = SigningKeyStore.load(Path.of(signingKeyPath), generateKeyIfMissing);
             this.privateKey = (RSAPrivateKey) pair.getPrivate();
             this.publicKey = (RSAPublicKey) pair.getPublic();
-            this.keyId = UUID.randomUUID().toString();
+            // Same persisted key => same kid across restarts/replicas, without a second metadata file.
+            this.keyId = Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(MessageDigest.getInstance("SHA-256").digest(publicKey.getEncoded()));
             this.accessExpirationMs = accessExpirationMs;
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to create RSA key pair for JWT", e);
+            throw new IllegalStateException("Failed to initialize persistent JWT signing key", e);
         }
     }
 

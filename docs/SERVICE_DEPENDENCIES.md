@@ -8,7 +8,7 @@ Baseline: existing 2026-11-07 implementation assessment. These are documented im
 | Gateway -> wallet | HTTP wallets/transfers and users/{userId}/wallet | Configured; preserve route distinctions from identity /users/me |
 | Gateway -> commerce | HTTP products/categories/carts/coupons/orders/returns | Configured; check edge routing when path families change |
 | Gateway -> notification | HTTP notifications paths | Configured; inbox requires bearer token |
-| Gateway, wallet, commerce, notification -> identity | HTTP GET /.well-known/jwks.json; RS256 JWT sub/email/permissions, orgIds where consumed | Gateway resource server; other services custom cached JWKS. Signing keys are process-local; no cross-service HTTP auth test evidence |
+| Gateway, wallet, commerce, notification -> identity | HTTP GET /.well-known/jwks.json; RS256 JWT sub/email/permissions, orgIds where consumed | Gateway resource server; other services custom cached JWKS. Signing key/kid now persist via a configured identity key file; replicas must share the same provisioned key. Public JWKS/claims unchanged; no live cross-service HTTP restart test evidence |
 | Commerce -> wallet | RestClient, caller JWT; GET /api/v1/users/{userId}/wallet, POST /api/v1/wallets/{walletId}/withdrawals or /deposits; amount and Idempotency-Key | Main payment.provider=wallet; tests simulated or mock HTTP. Charge key commerce-pay-{orderId}, refund commerce-refund-{orderId}; owner checks constrain staff refunds |
 | Commerce -> Kafka -> notification | JSON commerce.events, orderId partition key, locally duplicated CommerceDomainEvent records/enums | Both flags default false. Producer ignores send completion; no durable domain-event outbox. Consumer dedupes eventType+orderId |
 

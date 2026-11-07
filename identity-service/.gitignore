@@ -31,3 +31,8 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Local signing secrets must never be committed.
+.local/
+*.pk8
+*.pk8.lock
