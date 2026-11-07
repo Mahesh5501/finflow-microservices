@@ -9,7 +9,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.Instant;
 import java.util.Optional;
 
-/** One-time password-reset tokens (hashed). Separate table = separate repository (market norm). */
+/** One-time password-reset tokens (hashed). Its separate repository keeps reset-token queries distinct from login sessions. */
 public interface PasswordResetTokenRepository extends JpaRepository<PasswordResetToken, Long> {
 
     Optional<PasswordResetToken> findByTokenHash(String tokenHash);

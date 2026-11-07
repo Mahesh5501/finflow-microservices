@@ -10,8 +10,8 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 
 /**
- * Tenant / company in FinFlow.
- * Flow: User → Membership(role) → Org. Wallet APIs later scope by orgId from the JWT.
+ * Organisation workspace used by memberships and commerce access.
+ * Wallets remain user-owned; this entity does not change wallet ownership.
  */
 @Entity
 @Table(name = "organisation") // keep existing table name if DB already created

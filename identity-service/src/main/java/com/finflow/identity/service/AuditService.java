@@ -8,7 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-/** Writes / reads compliance audit entries. */
+/** Records identity actions and maps stored rows to audit responses; no compliance guarantee is implied. */
 @Service
 public class AuditService {
 
@@ -33,15 +33,15 @@ public class AuditService {
     @Transactional(readOnly = true)
     public List<AuditLogResponse> listForOrg(Long orgId) {
         return auditLogRepository.findByOrgIdOrderByCreatedAtDesc(orgId).stream()
-                .map(a -> new AuditLogResponse(
-                        a.getId(),
-                        a.getActorUserId(),
-                        a.getOrgId(),
-                        a.getAction(),
-                        a.getResourceType(),
-                        a.getResourceId(),
-                        a.getDetails(),
-                        a.getCreatedAt()
+                .map(entry -> new AuditLogResponse(
+                        entry.getId(),
+                        entry.getActorUserId(),
+                        entry.getOrgId(),
+                        entry.getAction(),
+                        entry.getResourceType(),
+                        entry.getResourceId(),
+                        entry.getDetails(),
+                        entry.getCreatedAt()
                 ))
                 .toList();
     }

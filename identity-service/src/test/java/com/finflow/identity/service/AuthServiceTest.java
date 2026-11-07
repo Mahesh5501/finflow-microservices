@@ -15,6 +15,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Locale;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -129,4 +131,16 @@ class AuthServiceTest {
         AuthenticationResponse login = authService.login("case@finflow.test", "password12");
         assertEquals("case@finflow.test", login.email());
     }
+    @Test
+    void emailNormalizationIsIndependentOfServerLocale() {
+        Locale originalLocale = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+            UserProfileResponse user = registerVerified("IDENTITY@FINFLOW.TEST", "password12");
+            assertEquals("identity@finflow.test", user.email());
+        } finally {
+            Locale.setDefault(originalLocale);
+        }
+    }
+
 }

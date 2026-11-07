@@ -174,7 +174,7 @@ JWT protects /api/v1/** except listed public POST auth routes; public JWKS/OPTIO
 - DTO records have Jakarta constraints and @Valid; coverage/consistency varies (for example price precision/create versus update). Controller method constraints and malformed JSON paths lack HTTP regressions.
 - Identity/wallet/commerce advice emits code/message and validation details; wallet/commerce handle optimistic conflicts. Wallet/commerce security send explicit JSON 401/403. Identity has no equivalent custom entry-point/error body; framework behaviour should be verified rather than copied from comments. Notification has auth JSON entry point but no domain controller advice.
 - Gateway has security JSON errors, reactive global exception mapping and fallback JSON. Filter-produced errors are not guaranteed to pass its exception handler.
-- SLF4J logs gateway method/path/status/duration/correlation and service events. No complete downstream MDC propagation, central collector or distributed tracing backend is configured. Identity audit records selected successes, not failed login attempts; raw one-time tokens currently appear in mail logs.
+- SLF4J logs gateway method/path/status/duration/correlation and service events. No complete downstream MDC propagation, central collector or distributed tracing backend is configured. Identity audit records selected successes, not failed login attempts; identity mail-stub logs omit token-bearing bodies after cleanup; local API responses still expose development tokens when mail.enabled=false.
 
 ## Persistence, build and deployment
 

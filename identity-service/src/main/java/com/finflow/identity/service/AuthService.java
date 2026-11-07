@@ -28,7 +28,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 
+/**
+ * Coordinates account and session workflows; repositories and JWT/mail collaborators keep
+ * persistence, cryptography and delivery details out of the HTTP controllers.
+ */
 @Service
 public class AuthService {
 
@@ -163,14 +168,14 @@ public class AuthService {
         return userRepository.findByEmail(normalized)
                 .filter(User::isActive)
                 .map(user -> {
-                    String raw = TokenCrypto.newRawToken();
+                    String rawResetToken = TokenCrypto.newRawToken();
                     passwordResetTokenRepository.save(new PasswordResetToken(
                             user.getId(),
-                            TokenCrypto.sha256(raw),
+                            TokenCrypto.sha256(rawResetToken),
                             Instant.now().plusMillis(passwordResetExpirationMs)
                     ));
-                    mailService.send(user.getEmail(), "FinFlow password reset", "Reset token: " + raw);
-                    return new DevTokenResponse(message, mailService.isEnabled() ? null : raw);
+                    mailService.send(user.getEmail(), "FinFlow password reset", "Reset token: " + rawResetToken);
+                    return new DevTokenResponse(message, mailService.isEnabled() ? null : rawResetToken);
                 })
                 .orElseGet(() -> new DevTokenResponse(message, null));
     }
@@ -212,14 +217,14 @@ public class AuthService {
     }
 
     private String issueEmailVerification(User user) {
-        String raw = TokenCrypto.newRawToken();
+        String rawVerificationToken = TokenCrypto.newRawToken();
         emailVerificationTokenRepository.save(new EmailVerificationToken(
                 user.getId(),
-                TokenCrypto.sha256(raw),
+                TokenCrypto.sha256(rawVerificationToken),
                 Instant.now().plusMillis(emailVerificationExpirationMs)
         ));
-        mailService.send(user.getEmail(), "Verify your FinFlow email", "Verification token: " + raw);
-        return raw;
+        mailService.send(user.getEmail(), "Verify your FinFlow email", "Verification token: " + rawVerificationToken);
+        return rawVerificationToken;
     }
 
     private AuthenticationResponse issueTokens(User user) {
@@ -227,15 +232,15 @@ public class AuthService {
         String accessJwt = jwtService.createAccessToken(
                 user.getId(), user.getEmail(), access.orgIds(), access.permissions()
         );
-        String rawRefresh = TokenCrypto.newRawToken();
+        String rawRefreshToken = TokenCrypto.newRawToken();
         refreshTokenRepository.save(new RefreshToken(
                 user.getId(),
-                TokenCrypto.sha256(rawRefresh),
+                TokenCrypto.sha256(rawRefreshToken),
                 Instant.now().plusMillis(refreshExpirationMs)
         ));
         return new AuthenticationResponse(
                 accessJwt,
-                rawRefresh,
+                rawRefreshToken,
                 "Bearer",
                 jwtService.getAccessExpirationSeconds(),
                 user.getId(),
@@ -251,8 +256,10 @@ public class AuthService {
         );
         List<Long> orgIds = memberships.stream().map(Membership::getOrgId).distinct().toList();
         LinkedHashSet<String> permissions = new LinkedHashSet<>();
-        for (Membership m : memberships) {
-            permissions.addAll(m.getRole().permissions());
+        // A LinkedHashSet removes duplicate permissions while keeping deterministic encounter order.
+        // Permissions are still unioned across memberships; this does not introduce per-org role claims.
+        for (Membership membership : memberships) {
+            permissions.addAll(membership.getRole().permissions());
         }
         return new OrgAccess(orgIds, List.copyOf(permissions));
     }
@@ -271,7 +278,8 @@ public class AuthService {
         if (email == null || email.isBlank()) {
             throw new IllegalArgumentException("Email is required");
         }
-        return email.trim().toLowerCase();
+        // Email identifiers must not depend on the machine's default locale.
+        return email.trim().toLowerCase(Locale.ROOT);
     }
 
     private static UserProfileResponse toUserProfileResponse(

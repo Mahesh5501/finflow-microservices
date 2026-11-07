@@ -23,8 +23,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
+/**
+ * Coordinates organisation use cases inside service-level transactions.
+ * Controllers own HTTP mapping; repositories own queries; entities own state transitions.
+ * Constructor injection keeps these collaborators explicit without a generic manager layer.
+ */
 @Service
 public class OrgService {
 
@@ -59,26 +67,41 @@ public class OrgService {
         Org org = orgRepository.save(new Org(name.trim()));
         membershipRepository.save(new Membership(actorUserId, org.getId(), OrgRole.ORG_ADMIN));
         auditService.record(actorUserId, org.getId(), "ORG_CREATED", "ORG", String.valueOf(org.getId()), name);
-        return new OrgResponse(org.getId(), org.getName(), OrgRole.ORG_ADMIN, org.getCreatedAt());
+        return toOrgResponse(org, OrgRole.ORG_ADMIN);
     }
 
     @Transactional(readOnly = true)
     public List<OrgResponse> listMine(Long userId) {
-        return membershipRepository.findByUserIdAndStatus(userId, MembershipStatus.ACTIVE).stream()
-                .map(m -> {
-                    Org org = orgRepository.findById(m.getOrgId())
-                            .orElseThrow(() -> ApiException.notFound("Org not found: " + m.getOrgId()));
-                    return new OrgResponse(org.getId(), org.getName(), m.getRole(), org.getCreatedAt());
+        List<Membership> memberships = membershipRepository.findByUserIdAndStatus(userId, MembershipStatus.ACTIVE);
+        if (memberships.isEmpty()) {
+            return List.of();
+        }
+
+        // Fetch the referenced organisations together instead of a query for every membership (N+1).
+        List<Long> orgIds = memberships.stream().map(Membership::getOrgId).distinct().toList();
+        Map<Long, Org> organisationsById = new HashMap<>();
+        for (Org organisation : orgRepository.findAllById(orgIds)) {
+            organisationsById.put(organisation.getId(), organisation);
+        }
+
+        // Batch queries do not promise input order. Iterate memberships to preserve the existing response order.
+        return memberships.stream()
+                .map(membership -> {
+                    Org organisation = organisationsById.get(membership.getOrgId());
+                    if (organisation == null) {
+                        throw ApiException.notFound("Org not found: " + membership.getOrgId());
+                    }
+                    return toOrgResponse(organisation, membership.getRole());
                 })
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public OrgResponse get(Long actorUserId, Long orgId) {
-        Membership mine = requireActiveMembership(actorUserId, orgId);
+        Membership callerMembership = requireActiveMembership(actorUserId, orgId);
         Org org = orgRepository.findById(orgId)
                 .orElseThrow(() -> ApiException.notFound("Org not found: " + orgId));
-        return new OrgResponse(org.getId(), org.getName(), mine.getRole(), org.getCreatedAt());
+        return toOrgResponse(org, callerMembership.getRole());
     }
 
     /**
@@ -88,35 +111,36 @@ public class OrgService {
     @Transactional
     public InviteMemberResponse inviteMember(Long actorUserId, Long orgId, String email, OrgRole role) {
         requirePermission(actorUserId, orgId, "members:manage");
-        String normalized = email.trim().toLowerCase();
-        User user = userRepository.findByEmail(normalized)
-                .orElseThrow(() -> ApiException.notFound("User not found for email: " + normalized));
+        // Locale.ROOT keeps email matching stable when the server's default locale changes.
+        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+        User user = userRepository.findByEmail(normalizedEmail)
+                .orElseThrow(() -> ApiException.notFound("User not found for email: " + normalizedEmail));
 
-        Membership existing = membershipRepository.findByUserIdAndOrgId(user.getId(), orgId).orElse(null);
-        if (existing != null && existing.isActive()) {
+        Membership existingMembership = membershipRepository.findByUserIdAndOrgId(user.getId(), orgId).orElse(null);
+        if (existingMembership != null && existingMembership.isActive()) {
             throw new IllegalArgumentException("User is already an active member of this org");
         }
-        if (existing != null) {
-            existing.markInvited(role);
+        if (existingMembership != null) {
+            existingMembership.markInvited(role);
         } else {
             membershipRepository.save(Membership.invited(user.getId(), orgId, role));
         }
 
-        String raw = TokenCrypto.newRawToken();
+        String rawInviteToken = TokenCrypto.newRawToken();
         orgInviteTokenRepository.save(new OrgInviteToken(
-                orgId, normalized, role, TokenCrypto.sha256(raw), Instant.now().plusMillis(inviteExpirationMs)
+                orgId, normalizedEmail, role, TokenCrypto.sha256(rawInviteToken), Instant.now().plusMillis(inviteExpirationMs)
         ));
-        mailService.send(normalized, "FinFlow org invite", "Invite token: " + raw);
+        mailService.send(normalizedEmail, "FinFlow org invite", "Invite token: " + rawInviteToken);
         auditService.record(
                 actorUserId, orgId, "MEMBER_INVITED", "MEMBERSHIP",
                 String.valueOf(user.getId()), "role=" + role
         );
         return new InviteMemberResponse(
                 orgId,
-                normalized,
+                normalizedEmail,
                 role,
                 "Invite sent",
-                mailService.isEnabled() ? null : raw
+                mailService.isEnabled() ? null : rawInviteToken
         );
     }
 
@@ -150,32 +174,47 @@ public class OrgService {
 
     @Transactional(readOnly = true)
     public List<OrgMemberResponse> listMembers(Long actorUserId, Long orgId) {
+        // Authorize before loading other users; batching must not widen data access.
         requireActiveMembership(actorUserId, orgId);
-        List<OrgMemberResponse> result = new ArrayList<>();
-        for (MembershipStatus status : List.of(MembershipStatus.ACTIVE, MembershipStatus.INVITED)) {
-            for (Membership m : membershipRepository.findByOrgIdAndStatus(orgId, status)) {
-                User user = userRepository.findById(m.getUserId())
-                        .orElseThrow(() -> ApiException.notFound("User not found: " + m.getUserId()));
-                result.add(toOrgMemberResponse(user, m));
-            }
+        List<Membership> memberships = new ArrayList<>(
+                membershipRepository.findByOrgIdAndStatus(orgId, MembershipStatus.ACTIVE));
+        memberships.addAll(membershipRepository.findByOrgIdAndStatus(orgId, MembershipStatus.INVITED));
+        if (memberships.isEmpty()) {
+            return new ArrayList<>();
         }
-        return result;
+
+        List<Long> userIds = memberships.stream().map(Membership::getUserId).distinct().toList();
+        Map<Long, User> usersById = new HashMap<>();
+        for (User user : userRepository.findAllById(userIds)) {
+            usersById.put(user.getId(), user);
+        }
+
+        // HashMap gives direct ID lookups; the membership list preserves ACTIVE-before-INVITED order.
+        List<OrgMemberResponse> members = new ArrayList<>(memberships.size());
+        for (Membership membership : memberships) {
+            User user = usersById.get(membership.getUserId());
+            if (user == null) {
+                throw ApiException.notFound("User not found: " + membership.getUserId());
+            }
+            members.add(toOrgMemberResponse(user, membership));
+        }
+        return members;
     }
 
     @Transactional
     public OrgMemberResponse changeRole(Long actorUserId, Long orgId, Long targetUserId, OrgRole role) {
         requirePermission(actorUserId, orgId, "members:manage");
         Membership membership = requireActiveMembership(targetUserId, orgId);
-        OrgRole previous = membership.getRole();
-        if (previous == OrgRole.ORG_ADMIN && role != OrgRole.ORG_ADMIN) {
-            ensureNotLastAdmin(orgId);
+        OrgRole previousRole = membership.getRole();
+        if (previousRole == OrgRole.ORG_ADMIN && role != OrgRole.ORG_ADMIN) {
+            ensureAnotherAdminRemains(orgId);
         }
         membership.changeRole(role);
         User user = userRepository.findById(targetUserId)
                 .orElseThrow(() -> ApiException.notFound("User not found: " + targetUserId));
         auditService.record(
                 actorUserId, orgId, "ROLE_CHANGED", "MEMBERSHIP",
-                String.valueOf(targetUserId), previous + "→" + role
+                String.valueOf(targetUserId), previousRole + "→" + role
         );
         return toOrgMemberResponse(user, membership);
     }
@@ -185,7 +224,7 @@ public class OrgService {
         requirePermission(actorUserId, orgId, "members:manage");
         Membership membership = requireActiveMembership(targetUserId, orgId);
         if (membership.getRole() == OrgRole.ORG_ADMIN) {
-            ensureNotLastAdmin(orgId);
+            ensureAnotherAdminRemains(orgId);
         }
         membership.remove();
         auditService.record(
@@ -200,10 +239,11 @@ public class OrgService {
         return auditService.listForOrg(orgId);
     }
 
-    private void ensureNotLastAdmin(Long orgId) {
-        long adminCount = membershipRepository.findByOrgIdAndStatus(orgId, MembershipStatus.ACTIVE).stream()
-                .filter(m -> m.getRole() == OrgRole.ORG_ADMIN)
-                .count();
+    private void ensureAnotherAdminRemains(Long orgId) {
+        // Count in SQL without materialising every active member.
+        // This remains a check-then-write guard; concurrent removals require a separate locking design.
+        long adminCount = membershipRepository.countByOrgIdAndStatusAndRole(
+                orgId, MembershipStatus.ACTIVE, OrgRole.ORG_ADMIN);
         if (adminCount <= 1) {
             throw new IllegalArgumentException("Cannot remove or demote the last ORG_ADMIN");
         }
@@ -224,6 +264,11 @@ public class OrgService {
             throw ApiException.notFound("Org not found: " + orgId);
         }
         return membership;
+    }
+
+    /** Build the API DTO explicitly instead of exposing a managed JPA entity. */
+    private static OrgResponse toOrgResponse(Org organisation, OrgRole callerRole) {
+        return new OrgResponse(organisation.getId(), organisation.getName(), callerRole, organisation.getCreatedAt());
     }
 
     private static OrgMemberResponse toOrgMemberResponse(User user, Membership membership) {

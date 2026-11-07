@@ -35,15 +35,16 @@ public class TokenCleanupJob {
         this.orgInviteTokenRepository = orgInviteTokenRepository;
     }
 
-    /** Every hour. */
+    /** Bulk deletes run hourly in a transaction, avoiding one delete call per expired token. */
     @Scheduled(cron = "0 0 * * * *")
     @Transactional
     public void cleanup() {
         Instant now = Instant.now();
-        int refresh = refreshTokenRepository.deleteExpiredOrRevoked(now);
-        int reset = passwordResetTokenRepository.deleteExpiredOrUsed(now);
-        int verify = emailVerificationTokenRepository.deleteExpiredOrUsed(now);
-        int invite = orgInviteTokenRepository.deleteExpiredOrUsed(now);
-        log.info("Token cleanup done refresh={} reset={} verify={} invite={}", refresh, reset, verify, invite);
+        int deletedRefreshTokens = refreshTokenRepository.deleteExpiredOrRevoked(now);
+        int deletedResetTokens = passwordResetTokenRepository.deleteExpiredOrUsed(now);
+        int deletedVerificationTokens = emailVerificationTokenRepository.deleteExpiredOrUsed(now);
+        int deletedInviteTokens = orgInviteTokenRepository.deleteExpiredOrUsed(now);
+        log.info("Token cleanup done refresh={} reset={} verify={} invite={}",
+                deletedRefreshTokens, deletedResetTokens, deletedVerificationTokens, deletedInviteTokens);
     }
 }

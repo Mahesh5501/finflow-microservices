@@ -6,9 +6,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * Local-friendly mail.
- * When {@code mail.enabled=false} (default), logs the link and APIs also return the raw token for Postman.
- * Enable + configure SMTP for real send in prod.
+ * Local mail stub: no SMTP/provider delivery is implemented for either flag value.
+ * The existing mail.enabled flag also controls whether callers expose local development tokens.
+ * Accept message content for the future delivery adapter, but never log token-bearing bodies.
  */
 @Service
 public class MailService {
@@ -22,12 +22,9 @@ public class MailService {
     }
 
     public void send(String to, String subject, String body) {
-        if (enabled) {
-            // Hook point for JavaMailSender in prod — intentionally logged locally for FinFlow learning.
-            log.info("MAIL enabled stub → to={} subject={} body={}", to, subject, body);
-        } else {
-            log.info("MAIL (dev/log only) → to={} subject={} body={}", to, subject, body);
-        }
+        String mode = enabled ? "enabled stub" : "dev/log only";
+        // Keep the diagnostic without leaking verification/reset/invite tokens from body.
+        log.info("MAIL ({}) to={} subject={} delivery=not-implemented", mode, to, subject);
     }
 
     public boolean isEnabled() {

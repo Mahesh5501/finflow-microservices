@@ -27,9 +27,9 @@ sequenceDiagram
 
 | Role | Permissions in JWT (union across active memberships) |
 |---|---|
-| ORG_ADMIN | `org:manage`, `members:manage`, `wallets:read`, `wallets:write`, `transfers:create` |
-| FINANCE_OPERATOR | `wallets:read`, `wallets:write`, `transfers:create` |
-| MEMBER | `wallets:read` |
+| ORG_ADMIN | `org:manage`, `members:manage`, `wallets:read`, `wallets:write`, `transfers:create`, `commerce:read`, `commerce:write` |
+| FINANCE_OPERATOR | `wallets:read`, `wallets:write`, `transfers:create`, `commerce:read`, `commerce:write` |
+| MEMBER | `wallets:read`, `wallets:write`, `commerce:read`, `commerce:write` |
 
 Reviewed 2026-11-07 starting at HEAD d878dd7 plus the existing working tree; final Git HEAD is d499559 after an external gateway commit. The API inventory is a source-based review; the first security-response improvement below is now implemented. This does not establish production readiness. Gateway work is preserved. No endpoints have been removed or renamed.
 
@@ -92,6 +92,32 @@ Paths below have `/api/v1` prefix unless shown otherwise. Successful status is f
 
 Mandatory is a product decision. This review found no proven duplicate API. Absence of a server-side caller does not prove an endpoint has no external client. For an initial learning path, show account onboarding and org creation first in Postman; put membership administration and audit in separate folders. That simplifies daily use without deleting capabilities.
 
+## Cleanup and design concepts used in this service
+
+The [interview question bank](../docs/Java%20Backend%20Interview%20Master%20Question%20Bank%20%E2%80%94%205%20YOE%20_%2025%E2%80%9330%2B%20LPA.md) is a study reference, not a requirement to add every technology it mentions. The cleanup uses the concepts that match the actual problem:
+
+| Concept | Where it appears | Purpose |
+|---|---|---|
+| Single responsibility | Controllers, services, repositories, JWT/key store, mail stub | HTTP, workflows, persistence and cryptography can be understood separately. |
+| Constructor injection / composition | AuthService and OrgService | Dependencies are explicit. Services compose existing collaborators instead of inheriting a generic base service. |
+| Repository abstraction | Eight Spring Data interfaces | Query details stay separate from use cases; no actively used repository was dropped. |
+| DTO records and a small mapper | OrgResponse and private toOrgResponse | Preserve the API contract without duplicating response construction or exposing entities. |
+| Batch fetch + HashMap | OrgService.listMine/listMembers | Load related rows together, then match IDs with direct lookups instead of per-row repository calls. |
+| List ordering | Membership list drives output | findAllById does not promise input order; active members remain before invited members. |
+| Database count | countByOrgIdAndStatusAndRole | Count admins without materialising every member. The concurrent last-admin race still requires a separate fix. |
+| Read-only transactions | Organisation read methods | Keep related reads inside an existing service transaction. This is not a guarantee of production concurrency correctness. |
+| LinkedHashSet | JWT permission collection | Remove duplicates while retaining encounter order. Flat permissions remain a union across memberships. |
+| Locale.ROOT | Account/invitation email normalization | Server locale must not change the interpretation of email identifiers. |
+| Token-safe diagnostics | MailService.send | Retain a stub diagnostic without logging message bodies that contain secrets. |
+
+SOLID is guidance about responsibilities and dependencies, not a reason to create an interface, factory or strategy for every class. This pass adds no application class, generic manager, inheritance hierarchy, cache, parallel stream, messaging integration or new dependency. Token repositories/entities and login/register DTOs stay separate because their workflows and persistence contracts are distinct. API paths, response fields, schema and role permissions were preserved.
+
+The batch lookups are an intended query-count improvement; live SQL counts/latency were not measured. Two membership queries remain deliberately separate in listMembers to preserve ACTIVE-before-INVITED grouping. Missing organisation/user references still produce existing not-found errors, and access is checked before loading other users.
+
+**Verification for this cleanup:** main sources compile with Java21 `mvn -B -o '-Dmaven.test.skip=true' compile`. Tests were not executed or test-compiled because the user requires confirmation. New pending regression cases cover batch ordering, missing references, access checks, database count use, locale normalization and mail log privacy. Earlier test results are historical; this cleanup has not passed a test run yet.
+
+Suggested test scope after confirmation: OrgServiceQueryTest, OrgServiceTest, AuthServiceTest and MailServiceTest. Real email delivery, atomic token consumption/last-admin protection, pagination, migrations and production deployment remain separate tasks.
+
 ## API conventions to apply
 
 - Keep versioned `/api/v1` paths, lowercase names, plural resource collections and current JWKS path. `/orgs` is internally consistent; renaming it solely to expand the abbreviation adds contract churn.
@@ -106,7 +132,7 @@ Security guidance: [OWASP Authentication](https://cheatsheetseries.owasp.org/che
 ## Production gaps confirmed in source
 
 1. **Restart persistence implemented:** JwtService loads a durable RSA private key via SigningKeyStore and derives a stable kid from its public key. See setup below. Rotation with overlapping keys, managed KMS/HSM storage and issuer/audience checks remain separate production work; consumer claim changes require agreement with gateway/wallet/commerce/notification.
-2. MailService logs full token-bearing messages in both enabled and disabled branches. `mail.enabled=true` does not send real email. Default false additionally returns verification/reset/invite tokens in API responses. Implement real delivery and separate explicit local-development token exposure before deployment; flipping the flag alone breaks real onboarding/recovery delivery.
+2. MailService remains a logging stub; its duplicated branches were simplified and message bodies are now omitted to avoid logging one-time tokens. `mail.enabled=true` does not send real email. Default false additionally returns verification/reset/invite tokens in API responses. Implement real delivery and separate explicit local-development token exposure before deployment; flipping the flag alone breaks real onboarding/recovery delivery.
 3. Logout/reset/change-password revoke refresh tokens, not existing access JWTs. Membership role/removal changes also leave previously issued claims usable until expiry. Define the required invalidation window rather than promise immediate revocation.
 4. Permissions are unioned across active memberships; orgIds and permissions do not encode a separate role per organisation. Review tenant-specific authorization with consumers before claiming tenant isolation.
 5. Rate limiting covers login/forgot/resend only; it trusts client X-Forwarded-For and uses separate Redis increment/expire commands with no explicit Redis-failure policy. Proxy trust, atomic expiry and broader abuse controls need a focused task.
