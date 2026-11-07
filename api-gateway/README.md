@@ -1,6 +1,6 @@
 # FinFlow API Gateway: how it works
 
-This guide explains the existing gateway in simple English. Pending production-readiness improvements are marked as proposals; shared retry configuration and the Java readability changes below are implemented.
+This guide explains the existing gateway in simple English. Pending production-readiness improvements are marked as proposals; shared retry configuration, Java readability changes and the unused-binding cleanup below are implemented.
 
 Current assessment: useful for local development and learning, **not ready for public production deployment**. Read the [detailed review](../docs/GATEWAY_REVIEW.md) for file-by-file findings and dated verification. This README reuses that review; writing it did not rerun the application or tests.
 
@@ -207,11 +207,15 @@ A timeout does not prove a money operation failed. Wallet may commit a debit bef
 
 Verification after the Java changes: `mvn -B -o verify` passed with 15 tests (one context load, 11 error-handler cases and three rate-limit key cases). These tests cover response/key behavior, not live identity/Redis integration or production load.
 
+**Unused-code audit completed:** all 28 tracked gateway files were checked for code/configuration/framework/build/manual use. Removed the unconsumed maxBodyBytes field/accessors/property and the unused typed Http object/accessors; the active app.http.* timeout properties remain referenced directly by YAML. Removed spring-security-test because none of the three current test classes uses its helpers. All nine application classes, routes, runtime dependencies, wrappers, Docker files and Postman fixtures were retained. Files without direct Java callers can still be framework entry points.
+
+Fresh Java 21 `mvn -B -o verify` passed all 15 tests and packaged the executable JAR. Before/after temporary gateway startup snapshots matched for routes/filter order/default filters, HTTP timeouts, rate settings and CORS; all nine application classes resolved as beans. No live Redis/downstream, Docker or wrapper-download testing was performed. The [file-by-file cleanup inventory](../docs/GATEWAY_REVIEW.md#cleanup-audit---2026-11-07) records every retained file and remaining limits. A future test that uses Spring Security test helpers would need to restore the test-only dependency deliberately.
+
 The remaining ideas below are **proposals**, not production fixes already made.
 
 1. **Keep routing declarative.** Path-to-service mappings belong in application.yml. Do not replace simple routes with custom controllers that manually call every service.
 2. **Give each component one job.** Security rules in SecurityConfig, typed settings in GatewayProperties, traffic-key policy in RateLimitConfig. Keep wallet/order rules in their services.
-3. **Use one authoritative setting per behavior.** app.max-body-bytes currently looks configurable while YAML uses a separate literal 1MB. Connect the setting to real enforcement.
+3. **Use one authoritative setting per behavior.** The unused app.max-body-bytes property was removed. The active RequestSize limit remains 1MB in application.yml; a future streaming-limit task should introduce one setting connected to actual enforcement.
 4. **Put request-wide concerns at the right layer.** An early WebFilter can establish a bounded correlation ID before security; final-request logging should account for success, error and cancellation. Keep attempt logs separate.
 5. **Keep errors consistent without rewriting everything.** Share a small edge error shape/helper where useful; preserve downstream business responses. Avoid a large generic response framework.
 6. **Preserve filter order when sharing configuration.** The implemented YAML anchor reuses retry settings in place. Moving Retry into default-filters could instead change its order relative to CircuitBreaker, so less YAML is not automatically safer. Future behavior changes need targeted regression tests.

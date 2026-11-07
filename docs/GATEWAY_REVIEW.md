@@ -161,3 +161,63 @@ Useful additions when justified: per-route auth abuse controls, private operatio
 ## Sources and completion
 
 Framework links above were checked against official Spring documentation/source, using 4.3.x/6.5.x/3.5.x references where available. Source-level deductions and untested deployment assumptions are labeled separately from runtime observations. Review complete; suggested fixes are pending user review, not implemented.
+
+## Cleanup audit - 2026-11-07
+
+Reviewed all **28 currently tracked gateway files** at HEAD 79d18aa, plus the purpose of ignored HELP.md and generated/local directories. Earlier sections are dated review evidence; references there to the unused max-body setting describe the pre-cleanup version. No entire tracked file was established as unnecessary.
+
+### Applied cleanup
+
+- Removed GatewayProperties.maxBodyBytes, its accessors and app.max-body-bytes. They did not drive RequestSize; the active YAML 1MB limit is unchanged. No streaming-limit fix is claimed.
+- Removed GatewayProperties.Http/getHttp and duplicate Java defaults/accessors. app.http.connect-timeout-ms/response-timeout-ms remain active YAML placeholders; the framework binds the resulting values to its own HttpClientProperties.
+- Removed the test-only spring-security-test dependency: the current three tests use Boot Test, JUnit and Spring Security core types, not that artifact's helpers. Final Maven verification passed without it. Restore intentionally if later HTTP-security tests need those helpers.
+- Retained all nine main classes and all active route/security/resilience/logging behavior. No runtime dependency was removed, no new dependency introduced and no tracked file deleted/renamed.
+
+### Complete tracked-file disposition
+
+| File relative to api-gateway | Evidence / disposition |
+|---|---|
+| .dockerignore | Keep: Docker build context exclusions; not Java code. |
+| .gitattributes | Keep: Unix/Windows wrapper line-ending rules. |
+| .gitignore | Keep: generated artifacts and local IDE metadata exclusions. |
+| .mvn/maven.config | Keep: Maven automatically selects the service settings file. |
+| .mvn/wrapper/maven-wrapper.properties | Keep: wrapper scripts read the distribution URL; wrapper metadata is not application code. |
+| Dockerfile | Keep: multi-stage image build, non-root runtime and application entry point. No Docker build/run in this audit. |
+| README.md | Keep/update: gateway learning guide, verified cleanup and remaining production tasks. |
+| maven-settings.xml | Keep: selected by .mvn/maven.config; repository mirror for local Maven. |
+| mvnw | Keep: optional Unix Maven entry point; download/cache/platform/checksum branches are wrapper infrastructure, not unused gateway logic. Not executed. |
+| mvnw.cmd | Keep: Windows wrapper entry point; same distinction. Not executed or downloaded. |
+| pom.xml | Keep/update: Java/Boot/Cloud, dependencies and executable packaging. Remove only unused spring-security-test. |
+| postman/FinFlow-API-Gateway.postman_collection.json | Keep: 52 asserted cases; optional fixture folders are deliberate, not dead requests. All declared variables have references. |
+| postman/README.md | Keep: import/setup, fixture switches, actual historical runs and coverage limits. |
+| src/main/java/com/finflow/apigateway/ApiGatewayApplication.java | Keep: Spring Boot main, component scan and auto-configuration entry point. |
+| src/main/java/com/finflow/apigateway/config/GatewayConfig.java | Keep: enables GatewayProperties and creates the browser CORS filter. |
+| src/main/java/com/finflow/apigateway/config/GatewayProperties.java | Keep/trim: rate-limit and CORS bindings are consumed; remove unused maxBodyBytes and Http subtree only. |
+| src/main/java/com/finflow/apigateway/error/GlobalErrorConfig.java | Keep: discovered ErrorWebExceptionHandler; private mapping/writing helpers and serialization/committed-response branches are used or defensive, with existing tests. |
+| src/main/java/com/finflow/apigateway/fallback/FallbackController.java | Keep: four downstream circuit-breaker fallbackUri values forward here. No direct Java caller is required. |
+| src/main/java/com/finflow/apigateway/filter/AccessLogFilter.java | Keep: Spring-discovered GlobalFilter/Ordered logs downstream attempts. |
+| src/main/java/com/finflow/apigateway/filter/CorrelationIdFilter.java | Keep: Spring-discovered route GlobalFilter propagates/creates and echoes correlation IDs. |
+| src/main/java/com/finflow/apigateway/ratelimit/RateLimitConfig.java | Keep: YAML SpEL resolves rateLimitKeyResolver and rateLimiter; private clientIp helper implements anonymous keys. |
+| src/main/java/com/finflow/apigateway/security/SecurityConfig.java | Keep: supplies reactive security chain and JWT authentication/error callbacks; access-denial handling is defensive, not proof it should be deleted. |
+| src/main/resources/application.properties | Keep/trim: downstream/JWKS, rate/CORS/Redis/timeouts/metrics/startup settings remain. Remove unused app.max-body-bytes. |
+| src/main/resources/application.yml | Keep unchanged: six routes, their predicates, fallback/retry/filter order and resilience policies are active. |
+| src/test/java/com/finflow/apigateway/ApiGatewayApplicationTests.java | Keep: Spring bean/context wiring smoke test; not an HTTP integration suite. |
+| src/test/java/com/finflow/apigateway/error/GlobalErrorConfigTest.java | Keep: 11 status/error/timeout/correlation/serialization cases. |
+| src/test/java/com/finflow/apigateway/ratelimit/RateLimitConfigTest.java | Keep: three principal/peer-IP/missing-address key cases. |
+| src/test/resources/application.properties | Keep: test-specific JWKS/route/timeout settings; test resources override main properties, not the gateway YAML routes. |
+
+### Dependencies and local artifacts
+
+Runtime dependencies have framework/configuration uses: Gateway WebFlux routing/Netty; Security/OAuth2 RS256/JWKS; reactive Resilience4j breakers/time limits; Redis token buckets; Actuator/Prometheus/Brave observability; Jakarta validation/configuration binding. A transitive dependency or starter may not have a direct import; that does not make it unused. Explicit runtime declarations were retained. The known missing nested @Valid validation remains a separate behavior-changing fix, not an excuse to remove all validation support.
+
+Ignored HELP.md is generated scaffolding with mismatched Boot/WebMVC links; use the tracked README instead. It is not built or versioned and was left untouched. Ignored target/ contains generated classes/JARs/reports/probe evidence, not source candidates; .idea/.vscode are local editor state and were not deleted. The packaged JAR was checked and contains no obsolete GatewayProperties$Http class. Wrapper distribution availability/download, checksum provisioning, Unix/Windows execution and Docker startup were not verified in this audit; wrappers remain useful optional entry points.
+
+### Executed checks and limits
+
+- Fresh `mvn -B -o -DskipTests compile` passed after cleanup. Initial file-edit helper used the wrong working-directory prefix and stopped before editing; corrected before compilation/verification evidence below.
+- Temporary isolated gateway starts before and after the property cleanup produced identical parsed runtime snapshots: all six route definitions, predicates, fallback/retry arguments/order, default filters including RequestSize 1MB, HTTP timeouts 2000/5000 ms, rate 50/100/1 and CORS settings. All nine main application classes resolved as Spring beans. These were local startup/configuration checks, not downstream load/HTTP verification.
+- Initial sandboxed verify hit Mockito temporary-agent initialization failure; approved unsandboxed verify passed. After the test-dependency removal, final Java21 `mvn -B -o verify`: **BUILD SUCCESS, 15 tests, zero failures/errors/skips**, executable JAR repackaged. Ignored logs: api-gateway/target/gateway-cleanup-final-verify.log and cleanup-before.log/cleanup-after.log. Temporary probe source/classpath stay ignored under target; startup processes closed after use.
+- Collection structure checks retained all 52 request cases with test events, every collection variable has a reference, and all 79 JavaScript event scripts parsed. No Postman HTTP cases were rerun; opt-in fixtures are not passes.
+- No source/config/policy changes in identity/wallet/commerce/notification. No live Redis/JWT/downstream, Docker, wrapper-download or load/security-policy rerun. Existing GW1-GW10 production gaps remain; GW2's unused-setting confusion is removed, while its streaming enforcement gap is unresolved.
+
+Next recommended gateway task remains a concrete management-endpoint access policy plus HTTP security regressions, followed by bounded streaming-body enforcement. Cleanup alone does not establish production readiness.

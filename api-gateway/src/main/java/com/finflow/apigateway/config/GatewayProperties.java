@@ -8,8 +8,8 @@ import org.springframework.validation.annotation.Validated;
 import java.util.List;
 
 /**
- * Typed settings bound from app.* properties.
- * Routing/filter configuration remains in application.yml.
+ * Typed rate-limit and CORS settings bound from app.* properties.
+ * Routing/filter configuration and direct HTTP timeout placeholders remain in application.yml.
  */
 @Validated
 @ConfigurationProperties(prefix = "app")
@@ -17,31 +17,14 @@ public class GatewayProperties {
 
     // Nested validation is not yet cascaded; adding @Valid is a separate reviewed fix.
     private final RateLimit rateLimit = new RateLimit();
-    private final Http http = new Http();
     private final Cors cors = new Cors();
-
-    // Currently not wired to RequestSize: YAML still declares a separate 1MB limit.
-    @Min(1024)
-    private long maxBodyBytes = 1_048_576;
 
     public RateLimit getRateLimit() {
         return rateLimit;
     }
 
-    public Http getHttp() {
-        return http;
-    }
-
     public Cors getCors() {
         return cors;
-    }
-
-    public long getMaxBodyBytes() {
-        return maxBodyBytes;
-    }
-
-    public void setMaxBodyBytes(long maxBodyBytes) {
-        this.maxBodyBytes = maxBodyBytes;
     }
 
     public static class RateLimit {
@@ -77,31 +60,6 @@ public class GatewayProperties {
 
         public void setRequestedTokens(int requestedTokens) {
             this.requestedTokens = requestedTokens;
-        }
-    }
-
-    public static class Http {
-        // Downstream connection and response deadlines, in milliseconds.
-        @Min(100)
-        private int connectTimeoutMs = 2000;
-
-        @Min(100)
-        private int responseTimeoutMs = 5000;
-
-        public int getConnectTimeoutMs() {
-            return connectTimeoutMs;
-        }
-
-        public void setConnectTimeoutMs(int connectTimeoutMs) {
-            this.connectTimeoutMs = connectTimeoutMs;
-        }
-
-        public int getResponseTimeoutMs() {
-            return responseTimeoutMs;
-        }
-
-        public void setResponseTimeoutMs(int responseTimeoutMs) {
-            this.responseTimeoutMs = responseTimeoutMs;
         }
     }
 
