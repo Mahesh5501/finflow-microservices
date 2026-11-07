@@ -2,7 +2,14 @@
 
 Last assessed: **2026-11-07 (Asia/Calcutta)**.
 
-## Latest progress checkpoint - 2026-11-07 (gateway Redis restored for learning)
+## Latest progress checkpoint - 2026-11-07 (api-gateway Lombok)
+
+- **Last active/affected service:** api-gateway. Added optional Lombok and applied it only where applicable: `GatewayProperties` getters/setters, `SecurityConfig`/`GlobalErrorConfig` constructors, `AccessLogFilter`/`GlobalErrorConfig` loggers. Left bean-only configs and `CorrelationIdFilter`/`FallbackController` unchanged. No `@Data`. Routes, Redis rate limiting, security rules and YAML unchanged.
+- **Important files:** `api-gateway/pom.xml`; `GatewayProperties`, `SecurityConfig`, `GlobalErrorConfig`, `AccessLogFilter`; AGENTS.md convention note; docs/DECISIONS.md dated entry.
+- **Verification:** Java 21 service-directory `mvn -B '-Dmaven.test.skip=true' compile` → **BUILD SUCCESS** (Lombok 1.18.40 resolved online; offline `-o` failed until first download). Tests not run pending confirmation. Suggested after approval: `mvn -B -o test` in api-gateway.
+- **Next:** Confirm focused gateway tests if desired; Redis live demo remains optional when Docker is up.
+
+## Previous checkpoint - 2026-11-07 (gateway Redis restored for learning)
 
 - **Last active/affected service:** api-gateway. After a brief Redis removal, the user chose to **keep the previous gateway Redis rate limiter** for learning (alongside identity Redis). Restored from HEAD: Redis reactive dependency, `RateLimitConfig`/`RateLimitConfigTest`, YAML `RequestRateLimiter`, rate-limit and `spring.data.redis.*` properties, `GatewayProperties.RateLimit`, gateway README/Postman artifacts, and matching architecture/dependency/decision/AGENTS/root README wording.
 - **Learning focus:** Docker Redis + gateway `RedisRateLimiter` (token bucket, `gateway:` keys) and identity fixed-window `RateLimitService` (`identity:ratelimit:`). No shared `finflow-redis` module yet.

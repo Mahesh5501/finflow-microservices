@@ -1,8 +1,6 @@
-
 package com.finflow.apigateway.filter;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
@@ -17,10 +15,9 @@ import java.util.concurrent.TimeUnit;
  * Logs gateway request attempts without logging request bodies or credentials.
  * Because retries can execute the downstream filter chain multiple times, this filter may produce one log entry per downstream attempt.
  */
+@Slf4j
 @Component
 public class AccessLogFilter implements GlobalFilter, Ordered {
-
-    private static final Logger log = LoggerFactory.getLogger(AccessLogFilter.class);
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -37,7 +34,7 @@ public class AccessLogFilter implements GlobalFilter, Ordered {
     /**
      * Records the HTTP method, path, response status, elapsed time, and correlation ID for this downstream attempt.
      */
-    private static void logAttempt(ServerWebExchange exchange, String correlationId, long startNanos) {
+    private void logAttempt(ServerWebExchange exchange, String correlationId, long startNanos) {
 
         Integer status = exchange.getResponse().getStatusCode() != null ? exchange.getResponse().getStatusCode().value() : null;
         long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);

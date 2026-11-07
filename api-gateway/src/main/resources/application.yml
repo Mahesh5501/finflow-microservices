@@ -149,8 +149,7 @@ spring.cloud.gateway.server.webflux:
             # It must match the Resilience4j instance configuration below.
             name: identityCb
 
-            # Local gateway endpoint used when the circuit breaker
-            # triggers its fallback.
+            # Local gateway endpoint used when the circuit breaker triggers its fallback.
             fallbackUri: forward:/fallback/identity
 
         # Reuses the shared GET retry configuration.

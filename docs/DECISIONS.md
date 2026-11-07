@@ -54,3 +54,7 @@ Scope deliberately excludes automated rotation/KMS integration and issuer/audien
 ## 2026-11-07: Use one identity runtime properties file
 
 At the user's request, removed identity-service/src/main/resources/application-prod.properties to simplify configuration. application.properties retains persistent-key loading/local bootstrap and environment overrides. Deployment requiring a pre-provisioned key must explicitly set IDENTITY_SIGNING_KEY_PATH and IDENTITY_GENERATE_KEY_IF_MISSING=false; activating prod alone no longer supplies those safeguards. Required-key configuration tests retain missing-key rejection and provisioned-key loading coverage without depending on a prod resource. No JWT algorithms, claims, routes, database schema or organisation behavior changed.
+
+## 2026-11-07: Lombok only in api-gateway where accessors/constructors/loggers are pure boilerplate
+
+At the user's request, added optional Lombok to api-gateway and applied it only where it removed clear boilerplate: `@Getter`/`@Setter` on `GatewayProperties` (and nested bindable types), `@RequiredArgsConstructor` on `SecurityConfig`/`GlobalErrorConfig`, and `@Slf4j` on logging classes. Filters/config beans without fields were left explicit. `@Data` is avoided. Other FinFlow services remain Lombok-free; DTOs continue to prefer records.

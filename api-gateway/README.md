@@ -51,7 +51,7 @@ Read the source in this order:
 
 1. `ApiGatewayApplication`: starts Spring Boot and discovers components.
 2. `SecurityConfig`: chooses public/protected paths, validates JWTs and formats security failures.
-3. `GatewayConfig` + `GatewayProperties`: turn configured CORS/rate settings into typed objects and a browser CORS filter. HTTP route definitions stay in YAML.
+3. `GatewayConfig` + `GatewayProperties`: turn configured CORS/rate settings into typed objects and a browser CORS filter. HTTP route definitions stay in YAML. Properties accessors use Lombok; other gateway beans stay explicit unless they only need a constructor or logger.
 4. `RateLimitConfig`: choose the authenticated subject, otherwise the socket IP, as the traffic-budget key.
 5. `CorrelationIdFilter` + `AccessLogFilter`: forward a request ID and log downstream attempts.
 6. `FallbackController` + `GlobalErrorConfig`: return a local 503 fallback or format otherwise-unhandled gateway errors. They do not rewrite every business-service response.

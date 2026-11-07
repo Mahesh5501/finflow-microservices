@@ -3,8 +3,8 @@ package com.finflow.apigateway.error;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.reactive.error.ErrorWebExceptionHandler;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -27,17 +27,13 @@ import java.util.concurrent.TimeoutException;
  * This handler covers exceptions reaching the gateway's global error handling.
  * Downstream responses and filters that have already written their own response are not rewritten here.
  */
+@Slf4j
 @Component
 @Order(-2)
+@RequiredArgsConstructor
 public class GlobalErrorConfig implements ErrorWebExceptionHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(GlobalErrorConfig.class);
-
     private final ObjectMapper objectMapper;
-
-    public GlobalErrorConfig(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
 
     @Override
     public Mono<Void> handle(ServerWebExchange exchange, Throwable ex) {

@@ -4,7 +4,7 @@ Extracted from the existing source-based assessment on 2026-11-07; no new implem
 
 | Service / port | Ownership | Distinct technologies | Entry point under src/main/java |
 |---|---|---|---|
-| api-gateway / 18080 | Edge routing/authentication, rate limit, resilience, access/correlation logs | Cloud BOM 2025.0.3, Gateway WebFlux, OAuth2 resource server, reactive Redis, Resilience4j, Prometheus/Brave | com.finflow.apigateway.ApiGatewayApplication |
+| api-gateway / 18080 | Edge routing/authentication, rate limit, resilience, access/correlation logs | Cloud BOM 2025.0.3, Gateway WebFlux, OAuth2 resource server, reactive Redis, Resilience4j, Prometheus/Brave, Lombok (narrow) | com.finflow.apigateway.ApiGatewayApplication |
 | identity-service / 18081 | Users, organisations/memberships, tokens, JWT/JWKS, identity-local audit | MVC, Security, JPA/MySQL, JJWT 0.12.6, blocking Redis, scheduled cleanup | com.finflow.identity.IdentityServiceApplication |
 | wallet-service / 18082 | Personal wallet balances, transfers/history and wallet lifecycle | MVC, Security, JPA/MySQL, JJWT, optimistic locking; no Redis implementation | com.finflow.wallet.WalletServiceApplication |
 | commerce-service / 18083 | Catalogue/categories, stock/cart, coupons/orders, fulfilment/returns and payment work | MVC, Security, JPA/MySQL, JJWT, PaymentPort HTTP/simulator adapters, optional Kafka, scheduled maintenance | com.finflow.commerce.CommerceServiceApplication |

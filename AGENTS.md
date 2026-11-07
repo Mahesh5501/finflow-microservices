@@ -46,7 +46,7 @@
 
 - Five independent Maven projects; no root aggregator or shared application module.
 - Java 21; Spring Boot parent 3.5.6 in every service.
-- Gateway: Spring Cloud BOM 2025.0.3, Gateway WebFlux, reactive Redis, OAuth2 resource server, Resilience4j, Actuator/Prometheus/Brave.
+- Gateway: Spring Cloud BOM 2025.0.3, Gateway WebFlux, reactive Redis, OAuth2 resource server, Resilience4j, Actuator/Prometheus/Brave, optional Lombok (narrow use).
 - Other services: Spring MVC, Security, Data JPA, Jakarta Validation, MySQL runtime, H2 tests; JJWT 0.12.6. Identity uses Redis; commerce/notification use optional Spring Kafka.
 - Compose pins MySQL 8.4, Redis 7.4-alpine, Kafka 3.8.1. Do not infer resolved library versions from prose; inspect the POM/dependency tree when needed.
 - Verify Java selection: this workstation defaults to Java 8. `finflow-env.sh` shows the installed Java 21 location. Do not change global Java settings.
@@ -55,6 +55,7 @@
 
 - Preserve `com.finflow.apigateway`, `com.finflow.identity`, `com.finflow.wallet`, `com.finflow.commerce`, and `com.finflow.notification` package roots.
 - Follow current four-space Java formatting, explicit imports, constructor injection, PascalCase types, camelCase members, uppercase enum/constants, and records for request/response DTOs.
+- api-gateway may use Lombok narrowly (`@Getter`/`@Setter` on configuration properties, `@RequiredArgsConstructor` for single-dependency beans, `@Slf4j` for loggers). Do not use `@Data`. Other services stay Lombok-free unless explicitly approved.
 - Controllers handle HTTP, validation, caller extraction and DTO mapping. Services orchestrate use cases and local transaction boundaries. Repositories remain Spring Data interfaces. Keep entity invariants near domain data.
 - Identity owns identities/memberships/tokens/audit; wallet owns balance/history/transfers; commerce owns products/carts/orders/returns/payment work; notification owns inbox records. Do not access another service's database.
 - Preserve `PaymentPort` and its conditional adapters and `CommerceEventPublisher` implementations. Do not add a second competing payment path.

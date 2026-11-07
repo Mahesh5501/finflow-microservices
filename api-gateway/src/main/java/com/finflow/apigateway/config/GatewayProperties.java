@@ -3,6 +3,8 @@ package com.finflow.apigateway.config;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
@@ -14,6 +16,7 @@ import java.util.List;
  */
 @Validated
 @ConfigurationProperties(prefix = "app")
+@Getter
 public class GatewayProperties {
 
     // @Valid enables validation of the nested configuration objects.
@@ -23,14 +26,8 @@ public class GatewayProperties {
     @Valid
     private final Cors cors = new Cors();
 
-    public RateLimit getRateLimit() {
-        return rateLimit;
-    }
-
-    public Cors getCors() {
-        return cors;
-    }
-
+    @Getter
+    @Setter
     public static class RateLimit {
         // Tokens restored each second, maximum saved tokens, and cost per request.
         @Min(1)
@@ -41,32 +38,10 @@ public class GatewayProperties {
 
         @Min(1)
         private int requestedTokens = 1;
-
-        public int getReplenishRate() {
-            return replenishRate;
-        }
-
-        public void setReplenishRate(int replenishRate) {
-            this.replenishRate = replenishRate;
-        }
-
-        public int getBurstCapacity() {
-            return burstCapacity;
-        }
-
-        public void setBurstCapacity(int burstCapacity) {
-            this.burstCapacity = burstCapacity;
-        }
-
-        public int getRequestedTokens() {
-            return requestedTokens;
-        }
-
-        public void setRequestedTokens(int requestedTokens) {
-            this.requestedTokens = requestedTokens;
-        }
     }
 
+    @Getter
+    @Setter
     public static class Cors {
         // Local defaults allow any origin. Production origins need an explicit policy.
         @NotEmpty
@@ -80,37 +55,5 @@ public class GatewayProperties {
 
         @Min(0)
         private long maxAgeSeconds = 3600;
-
-        public List<String> getAllowedOrigins() {
-            return allowedOrigins;
-        }
-
-        public void setAllowedOrigins(List<String> allowedOrigins) {
-            this.allowedOrigins = allowedOrigins;
-        }
-
-        public List<String> getAllowedMethods() {
-            return allowedMethods;
-        }
-
-        public void setAllowedMethods(List<String> allowedMethods) {
-            this.allowedMethods = allowedMethods;
-        }
-
-        public List<String> getAllowedHeaders() {
-            return allowedHeaders;
-        }
-
-        public void setAllowedHeaders(List<String> allowedHeaders) {
-            this.allowedHeaders = allowedHeaders;
-        }
-
-        public long getMaxAgeSeconds() {
-            return maxAgeSeconds;
-        }
-
-        public void setMaxAgeSeconds(long maxAgeSeconds) {
-            this.maxAgeSeconds = maxAgeSeconds;
-        }
     }
 }

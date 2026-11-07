@@ -2,6 +2,7 @@ package com.finflow.apigateway.security;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -27,13 +28,10 @@ import java.util.Map;
  */
 @Configuration
 @EnableWebFluxSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
 
     private final ObjectMapper objectMapper;
-
-    public SecurityConfig(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
 
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
@@ -59,8 +57,7 @@ public class SecurityConfig {
                         ).permitAll()
                         .pathMatchers("/api/v1/**").authenticated()  // All other API endpoints require authentication.
                         .pathMatchers("/actuator/**").denyAll() // Other actuator endpoints are not publicly accessible.
-                        .anyExchange().denyAll() // Deny every route not explicitly covered above.
-                )
+                        .anyExchange().denyAll()) // Deny every route not explicitly covered above.
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(Customizer.withDefaults()) // Signature/timestamp verification is delegated to Spring Security.
                         .authenticationEntryPoint(authenticationFailureHandler()))
