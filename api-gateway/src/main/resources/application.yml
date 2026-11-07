@@ -1,138 +1,360 @@
-# Read in order: retry template -> shared filters -> service routes -> failure limits.
+# ============================================================
+# FINFLOW API GATEWAY
+# ============================================================
+# This file configures:
+# 1. Retry behaviour
+# 2. Common gateway filters
+# 3. Downstream service routing
+# 4. Circuit breakers and operation timeouts
 
-# YAML helper only: &getRetry names this template; *getRetry reuses it in each route.
-# Two retries means up to three attempts. POST requests are never retried here.
+
+# ============================================================
+# 1. SHARED RETRY CONFIGURATION
+# ============================================================
+
+# YAML anchor (&getRetry) defines one reusable retry configuration.
+# Each route can reuse it with *getRetry instead of repeating settings.
 x-shared-filters: &getRetry
   name: Retry
+
   args:
+    # Number of additional attempts after the original request.
+    # retries: 2 means a maximum of 3 attempts in total.
     retries: 2
-    methods: GET
-    statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,SERVICE_UNAVAILABLE
+
+    # HTTP methods eligible for retry.
+    # We retry only GET because GET is intended to be safe and idempotent.
+    # POST, PUT, PATCH and DELETE are deliberately excluded.
+    methods:
+      - GET
+
+    # Retry only when the downstream service returns one of these statuses.
+    # BAD_GATEWAY       = 502
+    # GATEWAY_TIMEOUT   = 504
+    # SERVICE_UNAVAILABLE = 503
+    statuses:
+      - BAD_GATEWAY
+      - GATEWAY_TIMEOUT
+      - SERVICE_UNAVAILABLE
+
+    # Controls the delay between retry attempts.
     backoff:
+      # Initial delay before the first retry.
       firstBackoff: 50ms
+
+      # Maximum delay between retries.
       maxBackoff: 200ms
+
+      # Multiplier applied to the previous delay.
+      # Example: 50ms -> 100ms -> 200ms.
       factor: 2
 
-# Full Spring property prefix written on one line to avoid six levels of indentation.
+
+# ============================================================
+# 2. COMMON GATEWAY CONFIGURATION
+# ============================================================
+
 spring.cloud.gateway.server.webflux:
-  # Apply these filters to every matched service route, in this order.
+
+  # ----------------------------------------------------------
+  # DEFAULT FILTERS
+  # ----------------------------------------------------------
+  # These filters are applied to every matched gateway route.
+  # Their order matters because filters execute as a chain.
+
   default-filters:
+
+    # Removes duplicate CORS response headers.
+    # RETAIN_UNIQUE keeps one copy of each unique header value.
+    # This helps avoid duplicate CORS headers when multiple layers
+    # of the application add them.
     - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
+
+    # Limits the size of incoming request bodies.
     - name: RequestSize
       args:
+        # Maximum accepted request body size.
+        # Requests larger than 1 MB are rejected with HTTP 413.
         maxSize: 1MB
+
+    # Applies Redis-backed token-bucket rate limiting.
     - name: RequestRateLimiter
       args:
+        # Spring bean responsible for identifying the caller.
+        # Authenticated users use their subject ID.
+        # Anonymous callers use their peer IP address.
         key-resolver: "#{@rateLimitKeyResolver}"
+
+        # Redis-backed token bucket implementation.
+        # Its replenish rate, burst capacity and token cost
+        # are configured through GatewayProperties.
         rate-limiter: "#{@rateLimiter}"
+
+        # If the resolver returns an empty key, do not reject
+        # the request solely because the key is empty.
+        # Our resolver normally provides a user or IP fallback.
         deny-empty-key: false
 
-  # Actual values live in application.properties; connection and response deadlines differ.
+
+  # ----------------------------------------------------------
+  # DOWNSTREAM HTTP CLIENT
+  # ----------------------------------------------------------
+  # These settings control communication from the gateway
+  # to the downstream microservices.
+
   httpclient:
+
+    # Maximum time allowed to establish a connection.
+    # Value comes from application.properties.
+    # Example: 2000 ms = 2 seconds.
+    # If a connection cannot be established in time, the request fails.
     connect-timeout: ${app.http.connect-timeout-ms}
+
+    # Maximum time allowed to receive a response from the downstream service.
+    # Value comes from application.properties.
+    # Example: 5000 ms = 5 seconds.
     response-timeout: ${app.http.response-timeout-ms}ms
 
-  # Each route answers: which path, which service, and what to do if that service fails?
-  # Keep CircuitBreaker before Retry: the breaker wraps the downstream retry operation.
+
+  # ==========================================================
+  # 3. DOWNSTREAM SERVICE ROUTES
+  # ==========================================================
+  # Each route defines:
+  # - id: unique route identifier.
+  # - uri: destination service.
+  # - predicates: which incoming requests match this route.
+  # - filters: protections applied to the matched request.
+
   routes:
+
+    # --------------------------------------------------------
+    # IDENTITY SERVICE
+    # --------------------------------------------------------
+
+    # Dedicated route for the current user's profile.
+    # This route is more specific than the general identity routes.
     - id: identity-me
+
+      # Destination address of Identity Service.
+      # Configured in application.properties.
       uri: ${identity.uri}
+
+      # Requests matching this path are sent to Identity Service.
       predicates:
         - Path=/api/v1/users/me
+
       filters:
+
+        # Circuit breaker protects the Identity Service.
         - name: CircuitBreaker
           args:
+            # Name of the circuit-breaker instance.
+            # It must match the Resilience4j instance configuration below.
             name: identityCb
+
+            # Local gateway endpoint used when the circuit breaker
+            # triggers its fallback.
             fallbackUri: forward:/fallback/identity
+
+        # Reuses the shared GET retry configuration.
         - *getRetry
 
-    # This /users path belongs to wallet, unlike /users/me above.
-    - id: wallet-by-user
-      uri: ${wallet.uri}
-      predicates:
-        - Path=/api/v1/users/*/wallet
-      filters:
-        - name: CircuitBreaker
-          args:
-            name: walletCb
-            fallbackUri: forward:/fallback/wallet
-        - *getRetry
 
+    # Handles authentication, organization and public JWKS requests.
     - id: identity
+
       uri: ${identity.uri}
+
       predicates:
+        # Comma-separated paths handled by Identity Service.
+        # /api/v1/auth/**        = authentication endpoints
+        # /api/v1/orgs/**        = organization endpoints
+        # /.well-known/jwks.json = public signing-key endpoint
         - Path=/api/v1/auth/**,/api/v1/orgs/**,/.well-known/jwks.json
+
       filters:
         - name: CircuitBreaker
           args:
             name: identityCb
             fallbackUri: forward:/fallback/identity
+
         - *getRetry
 
-    - id: wallet
+
+    # --------------------------------------------------------
+    # WALLET SERVICE
+    # --------------------------------------------------------
+
+    # Dedicated route for retrieving a user's wallet.
+    - id: wallet-by-user
+
       uri: ${wallet.uri}
+
       predicates:
-        - Path=/api/v1/wallets/**,/api/v1/transfers/**
+        # * matches one path segment.
+        # Example: /api/v1/users/42/wallet
+        - Path=/api/v1/users/*/wallet
+
       filters:
         - name: CircuitBreaker
           args:
             name: walletCb
             fallbackUri: forward:/fallback/wallet
+
         - *getRetry
+
+
+    # Handles wallet and money-transfer APIs.
+    - id: wallet
+
+      uri: ${wallet.uri}
+
+      predicates:
+        # ** matches the remaining path segments.
+        # Examples:
+        # /api/v1/wallets/42
+        # /api/v1/wallets/42/deposits
+        # /api/v1/transfers/1001
+        - Path=/api/v1/wallets/**,/api/v1/transfers/**
+
+      filters:
+        - name: CircuitBreaker
+          args:
+            name: walletCb
+            fallbackUri: forward:/fallback/wallet
+
+        - *getRetry
+
+
+    # --------------------------------------------------------
+    # COMMERCE SERVICE
+    # --------------------------------------------------------
 
     - id: commerce
+
       uri: ${commerce.uri}
+
       predicates:
+        # Commerce owns product, order, cart, coupon, return
+        # and category-related endpoints.
         - Path=/api/v1/products/**,/api/v1/orders/**,/api/v1/carts/**,/api/v1/coupons/**,/api/v1/returns/**,/api/v1/categories/**
+
       filters:
         - name: CircuitBreaker
           args:
             name: commerceCb
             fallbackUri: forward:/fallback/commerce
+
         - *getRetry
 
+
+    # --------------------------------------------------------
+    # NOTIFICATION SERVICE
+    # --------------------------------------------------------
+
     - id: notification
+
       uri: ${notification.uri}
+
       predicates:
+        # All notification API requests are sent to Notification Service.
         - Path=/api/v1/notifications/**
+
       filters:
         - name: CircuitBreaker
           args:
             name: notificationCb
             fallbackUri: forward:/fallback/notification
+
         - *getRetry
 
-# Circuit breakers track failures independently for each downstream service.
+
+# ============================================================
+# 4. RESILIENCE4J CONFIGURATION
+# ============================================================
+
 resilience4j:
+
+  # ----------------------------------------------------------
+  # CIRCUIT BREAKER
+  # ----------------------------------------------------------
+  # Circuit breakers monitor failures and temporarily stop
+  # sending requests to an unhealthy downstream service.
+
   circuitbreaker:
+
+    # Shared default configuration.
+    # Individual circuit breakers inherit these values.
     configs:
       default:
+
+        # Number of recent calls considered when calculating
+        # the failure percentage.
         slidingWindowSize: 20
+
+        # Open the circuit when at least 50% of the recorded calls fail.
         failureRateThreshold: 50
+
+        # How long the circuit remains OPEN before recovery testing.
         waitDurationInOpenState: 10s
+
+        # Number of trial calls permitted when the circuit is HALF_OPEN.
         permittedNumberOfCallsInHalfOpenState: 5
+
+        # Automatically move from OPEN to HALF_OPEN after the wait duration.
+        # Without this, an additional request may be needed to trigger transition.
         automaticTransitionFromOpenToHalfOpenEnabled: true
+
+
+    # Separate circuit-breaker instances for each downstream service.
+    # Each instance inherits the common default configuration.
     instances:
+
+      # Protects Identity Service.
       identityCb:
         baseConfig: default
+
+      # Protects Wallet Service.
       walletCb:
         baseConfig: default
+
+      # Protects Commerce Service.
       commerceCb:
         baseConfig: default
+
+      # Protects Notification Service.
       notificationCb:
         baseConfig: default
 
-  # Bounds each protected asynchronous operation; not the same as the HTTP connect timeout.
+
+  # ----------------------------------------------------------
+  # TIME LIMITER
+  # ----------------------------------------------------------
+  # Limits the duration of supported asynchronous operations.
+  # This is separate from the HTTP connection timeout above.
+
   timelimiter:
+
+    # Shared default timeout configuration.
     configs:
       default:
+
+        # Maximum duration allowed for a protected operation.
+        # After 5 seconds, the time limiter reports a timeout.
         timeoutDuration: 5s
+
+
+    # Associate the timeout configuration with each service instance.
     instances:
+
       identityCb:
         baseConfig: default
+
       walletCb:
         baseConfig: default
+
       commerceCb:
         baseConfig: default
+
       notificationCb:
         baseConfig: default

@@ -43,16 +43,22 @@ public class SecurityConfig {
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
                 .authorizeExchange(ex -> ex
-                        // Browser preflight and the listed onboarding endpoints are public.
+
+                        // Browser CORS preflight requests are public.
                         .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // Health endpoints remain publicly accessible.
                         .pathMatchers(
                                 "/actuator/health",
-                                "/actuator/health/**",
-                                "/actuator/info",
-                                "/actuator/prometheus"
-                        ).permitAll()
+                                "/actuator/health/**").permitAll()
+
+                        // Gateway fallback endpoints remain public.
                         .pathMatchers("/fallback/**").permitAll()
+
+                        // Public JWKS endpoint.
                         .pathMatchers(HttpMethod.GET, "/.well-known/jwks.json").permitAll()
+
+                        // Public authentication and onboarding endpoints.
                         .pathMatchers(HttpMethod.POST,
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/verify-email",
@@ -63,9 +69,15 @@ public class SecurityConfig {
                                 "/api/v1/auth/forgot-password",
                                 "/api/v1/auth/reset-password"
                         ).permitAll()
+
+                        // All other API endpoints require authentication.
                         .pathMatchers("/api/v1/**").authenticated()
-                        // Existing local policy. Tightening management access is a separate task.
-                        .anyExchange().permitAll()
+
+                        // Other actuator endpoints are not publicly accessible.
+                        .pathMatchers("/actuator/**").denyAll()
+
+                        // Deny every route not explicitly covered above.
+                        .anyExchange().denyAll()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
                         // Signature/timestamp verification is delegated to Spring Security.

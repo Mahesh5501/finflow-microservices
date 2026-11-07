@@ -1,5 +1,6 @@
 package com.finflow.apigateway.config;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -15,8 +16,11 @@ import java.util.List;
 @ConfigurationProperties(prefix = "app")
 public class GatewayProperties {
 
-    // Nested validation is not yet cascaded; adding @Valid is a separate reviewed fix.
+    // @Valid enables validation of the nested configuration objects.
+    @Valid
     private final RateLimit rateLimit = new RateLimit();
+
+    @Valid
     private final Cors cors = new Cors();
 
     public RateLimit getRateLimit() {

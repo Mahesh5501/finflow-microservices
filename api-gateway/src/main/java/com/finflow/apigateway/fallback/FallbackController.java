@@ -12,8 +12,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Handles circuit-breaker forwards to /fallback/{service} with a JSON 503.
- * This response does not prove that a timed-out downstream write never committed.
+ * Handles circuit-breaker forwards to /fallback/{service}.
+ *
+ * Returns a consistent JSON 503 response when a downstream service
+ * is unavailable. This response does not guarantee that a timed-out
+ * downstream write operation was not committed.
+ *
+ * The controller is intentionally service-agnostic. New gateway services
+ * can reuse this fallback without requiring changes here.
  */
 @RestController
 public class FallbackController {
@@ -23,7 +29,7 @@ public class FallbackController {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("code", "UPSTREAM_UNAVAILABLE");
         body.put("message", "Service temporarily unavailable: " + service);
-        body.put("status", 503);
+        body.put("status", HttpStatus.SERVICE_UNAVAILABLE.value());
         body.put("service", service);
         return Mono.just(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(body));
     }

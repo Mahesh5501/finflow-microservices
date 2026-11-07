@@ -1,3 +1,4 @@
+
 package com.finflow.apigateway.filter;
 
 import org.slf4j.Logger;
@@ -10,44 +11,60 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import java.util.concurrent.TimeUnit;
+
 /**
- * Logs one downstream attempt without request bodies or bearer tokens.
- * Retry can run this filter multiple times for one client request.
+ * Logs gateway request attempts without logging request bodies or credentials.
+ *
+ * Because retries can execute the downstream filter chain multiple times,
+ * this filter may produce one log entry per downstream attempt.
  */
 @Component
 public class AccessLogFilter implements GlobalFilter, Ordered {
 
-    private static final Logger log = LoggerFactory.getLogger(AccessLogFilter.class);
+    private static final Logger log =
+            LoggerFactory.getLogger(AccessLogFilter.class);
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        long startMillis = System.currentTimeMillis();
+
+        // nanoTime provides reliable elapsed-time measurement.
+        long startNanos = System.nanoTime();
+
         ServerHttpRequest request = exchange.getRequest();
         String correlationId = request.getHeaders().getFirst(CorrelationIdFilter.HEADER);
 
-        // Observe completion/error without blocking the reactive request chain.
+        // Log once when the attempt completes, errors, or is cancelled.
         return chain.filter(exchange)
-                .doOnSuccess(ignored -> logAttempt(exchange, correlationId, startMillis))
-                .doOnError(error -> logAttempt(exchange, correlationId, startMillis));
+                .doFinally(signalType -> logAttempt(exchange, correlationId, startNanos));
     }
 
-    private static void logAttempt(ServerWebExchange exchange, String correlationId, long startMillis) {
+    /**
+     * Records the HTTP method, path, response status, elapsed time,
+     * and correlation ID for this downstream attempt.
+     */
+    private static void logAttempt(ServerWebExchange exchange, String correlationId, long startNanos) {
+
         Integer status = exchange.getResponse().getStatusCode() != null
                 ? exchange.getResponse().getStatusCode().value()
                 : null;
+
+        long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+
         log.info(
                 "method={} path={} status={} durationMs={} correlationId={}",
                 exchange.getRequest().getMethod(),
                 exchange.getRequest().getURI().getRawPath(),
                 status,
-                System.currentTimeMillis() - startMillis,
+                durationMs,
                 correlationId
         );
     }
 
     @Override
     public int getOrder() {
-        // Runs inside the route retry chain; this is not a final whole-request log.
+        // Runs late in the combined gateway filter chain.
+        // Retry ordering determines whether this logs individual attempts.
         return Ordered.LOWEST_PRECEDENCE;
     }
 }

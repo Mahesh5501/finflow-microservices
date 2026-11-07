@@ -9,36 +9,60 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
- * Adds or propagates X-Correlation-Id for matched gateway routes.
- * Security rejections and local endpoints can skip this route filter.
+ * Adds or propagates X-Correlation-Id for requests handled by gateway routes.
+ *
+ * A correlation ID allows us to trace a request across multiple services.
+ * The same ID is forwarded to downstream services and returned to the client.
  */
 @Component
 public class CorrelationIdFilter implements GlobalFilter, Ordered {
 
     public static final String HEADER = "X-Correlation-Id";
 
+    // Accept only simple, trace-friendly IDs to prevent malformed or excessively
+    // long client-supplied values from entering application logs.
+    private static final Pattern VALID_CORRELATION_ID = Pattern.compile("^[a-zA-Z0-9._-]{1,64}$");
+
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        String incomingId = exchange.getRequest().getHeaders().getFirst(HEADER);
-        String correlationId = (incomingId == null || incomingId.isBlank())
-                ? UUID.randomUUID().toString()
-                : incomingId.trim();
 
-        // Spring requests are immutable: forward a copy containing the ID.
+        // Read the correlation ID supplied by the incoming client request.
+        String incomingId = exchange.getRequest().getHeaders().getFirst(HEADER);
+
+        // Reuse the incoming ID only when it matches our accepted format.
+        // Otherwise, generate a new UUID so every request has a valid ID.
+        String correlationId = isValidCorrelationId(incomingId)
+                ? incomingId.trim()
+                : UUID.randomUUID().toString();
+
+        // ServerHttpRequest is immutable, so create a modified request
+        // containing the correlation ID before forwarding it downstream.
         ServerHttpRequest request = exchange.getRequest().mutate()
-                .header(HEADER, correlationId)
+                .headers(headers -> headers.set(HEADER, correlationId))
                 .build();
 
-        // Echo the same ID so the client can include it in an issue report.
+        // Return the same ID to the client for debugging and issue tracking.
         exchange.getResponse().getHeaders().set(HEADER, correlationId);
         return chain.filter(exchange.mutate().request(request).build());
     }
 
+    /**
+     * Validates the incoming correlation ID.
+     *
+     * Allows 1-64 characters containing only letters, digits, dots,
+     * underscores, and hyphens.
+     */
+    private boolean isValidCorrelationId(String correlationId) {
+        return correlationId != null && VALID_CORRELATION_ID.matcher(correlationId.trim()).matches();
+    }
+
     @Override
     public int getOrder() {
-        // First within the gateway route chain, not before Spring Security.
+        // Runs first within the gateway route filter chain.
+        // This does not mean it runs before Spring Security.
         return Ordered.HIGHEST_PRECEDENCE;
     }
 }

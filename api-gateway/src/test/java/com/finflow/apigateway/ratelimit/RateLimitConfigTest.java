@@ -1,3 +1,4 @@
+
 package com.finflow.apigateway.ratelimit;
 
 import org.junit.jupiter.api.Test;
@@ -14,16 +15,25 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class RateLimitConfigTest {
 
-    private final KeyResolver resolver = new RateLimitConfig().rateLimitKeyResolver();
+    private final KeyResolver resolver =
+            new RateLimitConfig().rateLimitKeyResolver();
 
     @Test
     void usesAuthenticatedSubjectInsteadOfIp() {
-        var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/wallets/1"))
-                .mutate()
-                .principal(Mono.just(UsernamePasswordAuthenticationToken.authenticated("42", null, List.of())))
+        var exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/wallets/1")
+        ).mutate()
+                .principal(Mono.just(
+                        UsernamePasswordAuthenticationToken.authenticated(
+                                "42", null, List.of()
+                        )
+                ))
                 .build();
 
-        assertEquals("gateway:user:42", resolver.resolve(exchange).block());
+        assertEquals(
+                "gateway:user:42",
+                resolver.resolve(exchange).block()
+        );
     }
 
     @Test
@@ -34,13 +44,40 @@ class RateLimitConfigTest {
                         .header("X-Forwarded-For", "203.0.113.99")
         );
 
-        assertEquals("gateway:ip:127.0.0.1", resolver.resolve(exchange).block());
+        assertEquals(
+                "gateway:ip:127.0.0.1",
+                resolver.resolve(exchange).block()
+        );
     }
 
     @Test
     void usesUnknownWhenPeerAddressIsMissing() {
-        var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/auth/login"));
+        var exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/auth/login")
+        );
 
-        assertEquals("gateway:ip:unknown", resolver.resolve(exchange).block());
+        assertEquals(
+                "gateway:ip:unknown",
+                resolver.resolve(exchange).block()
+        );
+    }
+
+    @Test
+    void fallsBackToPeerIpWhenAuthenticatedPrincipalNameIsBlank() {
+        var exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/wallets/1")
+                        .remoteAddress(new InetSocketAddress("127.0.0.1", 1234))
+        ).mutate()
+                .principal(Mono.just(
+                        UsernamePasswordAuthenticationToken.authenticated(
+                                "", null, List.of()
+                        )
+                ))
+                .build();
+
+        assertEquals(
+                "gateway:ip:127.0.0.1",
+                resolver.resolve(exchange).block()
+        );
     }
 }

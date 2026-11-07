@@ -7,20 +7,39 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsWebFilter;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 
-/** Builds the browser CORS policy from app.cors.* settings. */
+/**
+ * Configures Cross-Origin Resource Sharing (CORS) for the API Gateway.
+ *
+ * Browser clients use CORS when calling the gateway from a different origin.
+ * Settings are loaded from the app.cors.* properties.
+ */
 @Configuration
 @EnableConfigurationProperties(GatewayProperties.class)
 public class GatewayConfig {
 
+    /**
+     * Creates a global reactive CORS filter.
+     *
+     * Applying the policy to /** ensures that browser preflight requests
+     * and actual API requests use the same configured CORS rules.
+     */
     @Bean
     public CorsWebFilter corsWebFilter(GatewayProperties properties) {
         GatewayProperties.Cors settings = properties.getCors();
         CorsConfiguration cors = new CorsConfiguration();
+
+        // Configure which browser origins may call this gateway.
         cors.setAllowedOriginPatterns(settings.getAllowedOrigins());
+
+        // Configure which HTTP methods and request headers are permitted.
         cors.setAllowedMethods(settings.getAllowedMethods());
         cors.setAllowedHeaders(settings.getAllowedHeaders());
-        // Do not opt into credentialed cross-origin browser requests.
+
+        // Credentials are disabled: browsers cannot use this CORS policy
+        // to make credentialed cross-origin requests.
         cors.setAllowCredentials(false);
+
+        // Controls how long browsers may cache preflight responses.
         cors.setMaxAge(settings.getMaxAgeSeconds());
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
