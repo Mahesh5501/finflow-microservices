@@ -7,14 +7,20 @@ import org.springframework.validation.annotation.Validated;
 
 import java.util.List;
 
+/**
+ * Typed settings bound from app.* properties.
+ * Routing/filter configuration remains in application.yml.
+ */
 @Validated
 @ConfigurationProperties(prefix = "app")
 public class GatewayProperties {
 
+    // Nested validation is not yet cascaded; adding @Valid is a separate reviewed fix.
     private final RateLimit rateLimit = new RateLimit();
     private final Http http = new Http();
     private final Cors cors = new Cors();
 
+    // Currently not wired to RequestSize: YAML still declares a separate 1MB limit.
     @Min(1024)
     private long maxBodyBytes = 1_048_576;
 
@@ -39,6 +45,7 @@ public class GatewayProperties {
     }
 
     public static class RateLimit {
+        // Tokens restored each second, maximum saved tokens, and cost per request.
         @Min(1)
         private int replenishRate = 50;
 
@@ -74,6 +81,7 @@ public class GatewayProperties {
     }
 
     public static class Http {
+        // Downstream connection and response deadlines, in milliseconds.
         @Min(100)
         private int connectTimeoutMs = 2000;
 
@@ -98,6 +106,7 @@ public class GatewayProperties {
     }
 
     public static class Cors {
+        // Local defaults allow any origin. Production origins need an explicit policy.
         @NotEmpty
         private List<String> allowedOrigins = List.of("*");
 

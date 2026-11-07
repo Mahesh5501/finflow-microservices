@@ -21,7 +21,8 @@ import java.util.Map;
 import java.util.concurrent.TimeoutException;
 
 /**
- * Stable JSON errors for gateway-level failures (timeouts, not found, rate limit bubbles, etc.).
+ * Converts unhandled gateway exceptions into JSON.
+ * Downstream responses and filters that write their own response do not pass through here.
  */
 @Component
 @Order(-2)
@@ -38,7 +39,7 @@ public class GlobalErrorConfig implements ErrorWebExceptionHandler {
     @Override
     public Mono<Void> handle(ServerWebExchange exchange, Throwable ex) {
         HttpStatus status = resolveStatus(ex);
-        String code = resolveCode(status, ex);
+        String code = resolveCode(status);
         String message = resolveMessage(ex, status);
 
         if (status.is5xxServerError()) {
@@ -50,6 +51,7 @@ public class GlobalErrorConfig implements ErrorWebExceptionHandler {
         }
 
         ServerHttpResponse response = exchange.getResponse();
+        // Propagate the error if the response can no longer be rewritten.
         if (response.isCommitted()) {
             return Mono.error(ex);
         }
@@ -60,16 +62,21 @@ public class GlobalErrorConfig implements ErrorWebExceptionHandler {
         body.put("code", code);
         body.put("message", message);
         body.put("status", status.value());
-        String correlation = exchange.getRequest().getHeaders().getFirst("X-Correlation-Id");
-        if (correlation != null) {
-            body.put("correlationId", correlation);
+        String correlationId = exchange.getRequest().getHeaders().getFirst("X-Correlation-Id");
+        if (correlationId != null) {
+            body.put("correlationId", correlationId);
         }
 
+        return writeJson(response, body);
+    }
+
+    private Mono<Void> writeJson(ServerHttpResponse response, Map<String, Object> body) {
         try {
             byte[] bytes = objectMapper.writeValueAsBytes(body);
             DataBuffer buffer = response.bufferFactory().wrap(bytes);
             return response.writeWith(Mono.just(buffer));
         } catch (JsonProcessingException e) {
+            // Keep the response writable even if JSON serialization fails.
             byte[] bytes = "{\"code\":\"GATEWAY_ERROR\",\"message\":\"Unexpected error\"}"
                     .getBytes(StandardCharsets.UTF_8);
             return response.writeWith(Mono.just(response.bufferFactory().wrap(bytes)));
@@ -90,23 +97,14 @@ public class GlobalErrorConfig implements ErrorWebExceptionHandler {
         return HttpStatus.INTERNAL_SERVER_ERROR;
     }
 
-    private static String resolveCode(HttpStatus status, Throwable ex) {
-        if (status == HttpStatus.NOT_FOUND) {
-            return "ROUTE_NOT_FOUND";
-        }
-        if (status == HttpStatus.GATEWAY_TIMEOUT) {
-            return "UPSTREAM_TIMEOUT";
-        }
-        if (status == HttpStatus.TOO_MANY_REQUESTS) {
-            return "RATE_LIMITED";
-        }
-        if (status == HttpStatus.PAYLOAD_TOO_LARGE) {
-            return "PAYLOAD_TOO_LARGE";
-        }
-        if (status.is4xxClientError()) {
-            return "BAD_REQUEST";
-        }
-        return "GATEWAY_ERROR";
+    private static String resolveCode(HttpStatus status) {
+        return switch (status) {
+            case NOT_FOUND -> "ROUTE_NOT_FOUND";
+            case GATEWAY_TIMEOUT -> "UPSTREAM_TIMEOUT";
+            case TOO_MANY_REQUESTS -> "RATE_LIMITED";
+            case PAYLOAD_TOO_LARGE -> "PAYLOAD_TOO_LARGE";
+            default -> status.is4xxClientError() ? "BAD_REQUEST" : "GATEWAY_ERROR";
+        };
     }
 
     private static String resolveMessage(Throwable ex, HttpStatus status) {

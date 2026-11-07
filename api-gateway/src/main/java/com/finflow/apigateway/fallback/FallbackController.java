@@ -12,8 +12,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Circuit-breaker fallbacks ({@code forward:/fallback/{service}}).
- * Client gets a stable JSON 503 instead of a raw connection error.
+ * Handles circuit-breaker forwards to /fallback/{service} with a JSON 503.
+ * This response does not prove that a timed-out downstream write never committed.
  */
 @RestController
 public class FallbackController {

@@ -1,6 +1,6 @@
 # FinFlow API Gateway: how it works
 
-This guide explains the existing gateway in simple English. Pending production-readiness improvements are marked as proposals; the shared retry-configuration simplification below is implemented.
+This guide explains the existing gateway in simple English. Pending production-readiness improvements are marked as proposals; shared retry configuration and the Java readability changes below are implemented.
 
 Current assessment: useful for local development and learning, **not ready for public production deployment**. Read the [detailed review](../docs/GATEWAY_REVIEW.md) for file-by-file findings and dated verification. This README reuses that review; writing it did not rerun the application or tests.
 
@@ -159,6 +159,8 @@ Java links are under src/main/java/com/finflow/apigateway.
 | [GlobalErrorConfig.java](src/main/java/com/finflow/apigateway/error/GlobalErrorConfig.java) | How are unhandled gateway exceptions mapped to JSON? |
 | [ApiGatewayApplication.java](src/main/java/com/finflow/apigateway/ApiGatewayApplication.java) | Where does Spring Boot start? |
 | [ApiGatewayApplicationTests.java](src/test/java/com/finflow/apigateway/ApiGatewayApplicationTests.java) | What does the existing automated test actually check? |
+| [GlobalErrorConfigTest.java](src/test/java/com/finflow/apigateway/error/GlobalErrorConfigTest.java) | Which error statuses, JSON responses and committed-response behavior are covered? |
+| [RateLimitConfigTest.java](src/test/java/com/finflow/apigateway/ratelimit/RateLimitConfigTest.java) | How are authenticated, anonymous and missing-address rate-limit keys checked? |
 
 The bootstrap class starts the application. Most gateway behavior comes from Spring's built-in filters plus configuration, not custom controllers/services.
 
@@ -200,6 +202,10 @@ A timeout does not prove a money operation failed. Wallet may commit a debit bef
 ## 8. How can we keep the code simpler?
 
 **Small simplification implemented:** application.yml now defines retry settings once with the YAML anchor `&getRetry`. The other five routes use `*getRetry`, which means "reuse that same configuration here." Each reference stays after its route's CircuitBreaker. The parsed configuration was compared with the original using the packaged SnakeYAML parser and was identical; Maven verify also passed with the existing context-load test. This removes five duplicate blocks without introducing Java classes or changing retry policy.
+
+**Java readability changes implemented:** error handling now separates JSON writing from response classification, with a switch for status-to-code mapping. The rate-limit resolver reads as "authenticated subject, otherwise peer IP"; the address lookup is a short helper. CORS settings have one local name instead of repeated chained getters. Comments explain route-only filter scope, retry-attempt logs, request mutation and the difference between 401/403. These are small internal refactors, not changes to security or traffic policy.
+
+Verification after the Java changes: `mvn -B -o verify` passed with 15 tests (one context load, 11 error-handler cases and three rate-limit key cases). These tests cover response/key behavior, not live identity/Redis integration or production load.
 
 The remaining ideas below are **proposals**, not production fixes already made.
 
@@ -245,7 +251,7 @@ mvn spring-boot:run
 
 Run these as separate actions: verification builds/tests; spring-boot:run starts the gateway. Other service/Redis availability is needed for real routed flows; startup alone does not prove those dependencies work. Do not start or reset infrastructure merely to read this guide.
 
-The previous review's verify succeeded, but the module contains only one context-load test. It does not test the flows in this guide. The review's HTTP probes were temporary observations, not a committed regression suite. No tests were rerun just to write this README.
+The original review ran only one context-load test. The subsequent Java readability task added 14 focused error/key regression cases and passed all 15 tests with Maven verify. Full HTTP security, live Redis/JWT integration and failure/load coverage are still pending. The original review's HTTP probes were temporary observations, not a committed regression suite.
 
 Manual request example, after obtaining a real access token and an owned wallet ID:
 
@@ -254,6 +260,6 @@ GET http://localhost:18080/api/v1/wallets/7
 Authorization: Bearer <access-token>
 ```
 
-Use [Postman instructions](postman/README.md) for the existing collection. Do not paste real tokens into documentation or commit them.
+Use [Postman instructions](postman/README.md) for the 52-case gateway collection, fixture flags, actual execution results and coverage limits. Folder 01 has 24 gateway-only checks. Folder 02 sends live requests without an enable switch; select individual wallet requests when only wallet is running. Authorization/fault/rate-limit fixtures remain opt-in. Known production-gap checks deliberately expose existing failures. Do not paste real tokens into documentation or commit them.
 
 For a later session, you can simply say: "Explain the wallet request flow", "Show me how the rate limiter works" or "Let's implement the first gateway production-readiness task."

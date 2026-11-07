@@ -4,9 +4,10 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
- * FinFlow <b>api-gateway</b> — production-style edge.
+ * Starts FinFlow's reactive API gateway.
  *
- * <p>Rate limiting uses shared Redis ({@code localhost:6379} via infrastructure docker-compose).
+ * Routes and filter policies live in application.yml; business rules stay in their services.
+ * Rate limiting connects to the shared Redis configured in application.properties.
  */
 @SpringBootApplication
 public class ApiGatewayApplication {

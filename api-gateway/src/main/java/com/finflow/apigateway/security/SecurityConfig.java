@@ -22,8 +22,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Edge auth for the gateway.
- * Public auth endpoints + actuator health/info/prometheus scrape (lock metrics down in real prod).
+ * Authenticates protected API requests using identity-service's JWKS.
+ * Business services still enforce permissions, organisation access and ownership.
  */
 @Configuration
 @EnableWebFluxSecurity
@@ -38,10 +38,12 @@ public class SecurityConfig {
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
         http
+                // This API uses bearer headers rather than form login or HTTP Basic.
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
                 .authorizeExchange(ex -> ex
+                        // Browser preflight and the listed onboarding endpoints are public.
                         .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .pathMatchers(
                                 "/actuator/health",
@@ -62,20 +64,23 @@ public class SecurityConfig {
                                 "/api/v1/auth/reset-password"
                         ).permitAll()
                         .pathMatchers("/api/v1/**").authenticated()
+                        // Existing local policy. Tightening management access is a separate task.
                         .anyExchange().permitAll()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
+                        // Signature/timestamp verification is delegated to Spring Security.
                         .jwt(Customizer.withDefaults())
-                        .authenticationEntryPoint(jsonEntryPoint())
+                        .authenticationEntryPoint(authenticationFailureHandler())
                 )
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint(jsonEntryPoint())
-                        .accessDeniedHandler(jsonAccessDenied())
+                        .authenticationEntryPoint(authenticationFailureHandler())
+                        .accessDeniedHandler(accessDeniedHandler())
                 );
         return http.build();
     }
 
-    private ServerAuthenticationEntryPoint jsonEntryPoint() {
+    /** 401: authentication is missing or the access token was rejected. */
+    private ServerAuthenticationEntryPoint authenticationFailureHandler() {
         return (exchange, ex) -> writeJson(
                 exchange.getResponse(),
                 HttpStatus.UNAUTHORIZED,
@@ -84,7 +89,8 @@ public class SecurityConfig {
         );
     }
 
-    private ServerAccessDeniedHandler jsonAccessDenied() {
+    /** 403: an authenticated request is not permitted by the security rules. */
+    private ServerAccessDeniedHandler accessDeniedHandler() {
         return (exchange, denied) -> writeJson(
                 exchange.getResponse(),
                 HttpStatus.FORBIDDEN,
