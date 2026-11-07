@@ -2,7 +2,14 @@
 
 Last assessed: **2026-11-07 (Asia/Calcutta)**.
 
-## Latest progress checkpoint - 2026-11-07 (identity cleanup implementation; tests pending)
+## Latest progress checkpoint - 2026-11-07 (gateway Redis restored for learning)
+
+- **Last active/affected service:** api-gateway. After a brief Redis removal, the user chose to **keep the previous gateway Redis rate limiter** for learning (alongside identity Redis). Restored from HEAD: Redis reactive dependency, `RateLimitConfig`/`RateLimitConfigTest`, YAML `RequestRateLimiter`, rate-limit and `spring.data.redis.*` properties, `GatewayProperties.RateLimit`, gateway README/Postman artifacts, and matching architecture/dependency/decision/AGENTS/root README wording.
+- **Learning focus:** Docker Redis + gateway `RedisRateLimiter` (token bucket, `gateway:` keys) and identity fixed-window `RateLimitService` (`identity:ratelimit:`). No shared `finflow-redis` module yet.
+- **Verification:** Restored files match pre-removal HEAD content for the listed paths; no fresh Maven/Postman run claimed in this restore step.
+- **Next:** Start Redis (`docker compose up -d redis`), run gateway + identity, inspect keys with `redis-cli`. Identity cleanup tests remain separately pending.
+
+## Previous checkpoint - 2026-11-07 (identity cleanup implementation; tests pending)
 
 - **Last active/affected service:** identity-service. Applied the approved cleanup, guided by relevant collections/DI/transactions/database topics in docs/Java Backend Interview Master Question Bank — 5 YOE _ 25–30+ LPA.md. No attempt to introduce every technology/pattern; no application classes/dependencies/API/schema/role-policy changes. Existing separate security responsibilities and all eight repositories retained.
 - **Query cleanup:** OrgService.listMine batch-loads organisations into a local HashMap, returning in membership order and retaining missing-reference errors. listMembers authorizes first, keeps ACTIVE then INVITED membership queries/order, and batch-loads users into an ID map. Empty memberships skip the related fetch. MembershipRepository adds countByOrgIdAndStatusAndRole for ensureAnotherAdminRemains, replacing entity loading for admin counts. The existing check-then-write race remains; performance gain is intended, not measured against live MySQL.
