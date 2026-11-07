@@ -128,52 +128,20 @@ spring.cloud.gateway.server.webflux:
     # IDENTITY SERVICE
     # --------------------------------------------------------
 
-    # Dedicated route for the current user's profile.
-    # This route is more specific than the general identity routes.
-    - id: identity-me
-
-      # Destination address of Identity Service.
-      # Configured in application.properties.
-      uri: ${identity.uri}
-
-      # Requests matching this path are sent to Identity Service.
-      predicates:
-        - Path=/api/v1/users/me
-
-      filters:
-
-        # Circuit breaker protects the Identity Service.
-        - name: CircuitBreaker
-          args:
-            # Name of the circuit-breaker instance.
-            # It must match the Resilience4j instance configuration below.
-            name: identityCb
-
-            # Local gateway endpoint used when the circuit breaker triggers its fallback.
-            fallbackUri: forward:/fallback/identity
-
-        # Reuses the shared GET retry configuration.
-        - *getRetry
-
-
     # Handles authentication, organization and public JWKS requests.
     - id: identity
-
       uri: ${identity.uri}
-
       predicates:
         # Comma-separated paths handled by Identity Service.
         # /api/v1/auth/**        = authentication endpoints
         # /api/v1/orgs/**        = organization endpoints
         # /.well-known/jwks.json = public signing-key endpoint
-        - Path=/api/v1/auth/**,/api/v1/orgs/**,/.well-known/jwks.json
-
+        - Path=/api/v1/auth/**,/api/v1/orgs/**,/api/v1/users/me,/.well-known/jwks.json
       filters:
         - name: CircuitBreaker
           args:
             name: identityCb
             fallbackUri: forward:/fallback/identity
-
         - *getRetry
 
 
@@ -181,44 +149,24 @@ spring.cloud.gateway.server.webflux:
     # WALLET SERVICE
     # --------------------------------------------------------
 
-    # Dedicated route for retrieving a user's wallet.
-    - id: wallet-by-user
-
-      uri: ${wallet.uri}
-
-      predicates:
-        # * matches one path segment.
-        # Example: /api/v1/users/42/wallet
-        - Path=/api/v1/users/*/wallet
-
-      filters:
-        - name: CircuitBreaker
-          args:
-            name: walletCb
-            fallbackUri: forward:/fallback/wallet
-
-        - *getRetry
-
-
-    # Handles wallet and money-transfer APIs.
+    # Handles all APIs owned by Wallet Service:
+    # - User-to-wallet lookup
+    # - Wallet operations
+    # - Money transfers
     - id: wallet
-
       uri: ${wallet.uri}
-
       predicates:
         # ** matches the remaining path segments.
         # Examples:
         # /api/v1/wallets/42
         # /api/v1/wallets/42/deposits
         # /api/v1/transfers/1001
-        - Path=/api/v1/wallets/**,/api/v1/transfers/**
-
+        - Path=/api/v1/users/*/wallet,/api/v1/wallets/**,/api/v1/transfers/**
       filters:
         - name: CircuitBreaker
           args:
             name: walletCb
             fallbackUri: forward:/fallback/wallet
-
         - *getRetry
 
 
@@ -227,20 +175,15 @@ spring.cloud.gateway.server.webflux:
     # --------------------------------------------------------
 
     - id: commerce
-
       uri: ${commerce.uri}
-
       predicates:
-        # Commerce owns product, order, cart, coupon, return
-        # and category-related endpoints.
+        # Commerce owns product, order, cart, coupon, return and category-related endpoints.
         - Path=/api/v1/products/**,/api/v1/orders/**,/api/v1/carts/**,/api/v1/coupons/**,/api/v1/returns/**,/api/v1/categories/**
-
       filters:
         - name: CircuitBreaker
           args:
             name: commerceCb
             fallbackUri: forward:/fallback/commerce
-
         - *getRetry
 
 
@@ -249,19 +192,15 @@ spring.cloud.gateway.server.webflux:
     # --------------------------------------------------------
 
     - id: notification
-
       uri: ${notification.uri}
-
       predicates:
         # All notification API requests are sent to Notification Service.
         - Path=/api/v1/notifications/**
-
       filters:
         - name: CircuitBreaker
           args:
             name: notificationCb
             fallbackUri: forward:/fallback/notification
-
         - *getRetry
 
 
