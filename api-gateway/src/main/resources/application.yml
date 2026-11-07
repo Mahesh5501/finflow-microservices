@@ -86,12 +86,10 @@ spring.cloud.gateway.server.webflux:
         key-resolver: "#{@rateLimitKeyResolver}"
 
         # Redis-backed token bucket implementation.
-        # Its replenish rate, burst capacity and token cost
-        # are configured through GatewayProperties.
+        # Its replenish rate, burst capacity and token cost are configured through GatewayProperties.
         rate-limiter: "#{@rateLimiter}"
 
-        # If the resolver returns an empty key, do not reject
-        # the request solely because the key is empty.
+        # If the resolver returns an empty key, do not reject the request solely because the key is empty.
         # Our resolver normally provides a user or IP fallback.
         deny-empty-key: false
 
@@ -99,8 +97,7 @@ spring.cloud.gateway.server.webflux:
   # ----------------------------------------------------------
   # DOWNSTREAM HTTP CLIENT
   # ----------------------------------------------------------
-  # These settings control communication from the gateway
-  # to the downstream microservices.
+  # These settings control communication from the gateway to the downstream microservices.
 
   httpclient:
 
@@ -278,18 +275,15 @@ resilience4j:
   # ----------------------------------------------------------
   # CIRCUIT BREAKER
   # ----------------------------------------------------------
-  # Circuit breakers monitor failures and temporarily stop
-  # sending requests to an unhealthy downstream service.
+  # Circuit breakers monitor failures and temporarily stop sending requests to an unhealthy downstream service.
 
   circuitbreaker:
 
-    # Shared default configuration.
-    # Individual circuit breakers inherit these values.
+    # Shared default configuration. Individual circuit breakers inherit these values.
     configs:
       default:
 
-        # Number of recent calls considered when calculating
-        # the failure percentage.
+        # Number of recent calls considered when calculating the failure percentage.
         slidingWindowSize: 20
 
         # Open the circuit when at least 50% of the recorded calls fail.
@@ -330,8 +324,7 @@ resilience4j:
   # ----------------------------------------------------------
   # TIME LIMITER
   # ----------------------------------------------------------
-  # Limits the duration of supported asynchronous operations.
-  # This is separate from the HTTP connection timeout above.
+  # Limits the duration of supported asynchronous operations. This is separate from the HTTP connection timeout above.
 
   timelimiter:
 
@@ -339,8 +332,7 @@ resilience4j:
     configs:
       default:
 
-        # Maximum duration allowed for a protected operation.
-        # After 5 seconds, the time limiter reports a timeout.
+        # Maximum duration allowed for a protected operation. After 5 seconds, the time limiter reports a timeout.
         timeoutDuration: 5s
 
 

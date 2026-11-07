@@ -25,8 +25,7 @@ import java.util.concurrent.TimeoutException;
  * Converts unhandled API Gateway exceptions into a consistent JSON response.
  *
  * This handler covers exceptions reaching the gateway's global error handling.
- * Downstream responses and filters that have already written their own response
- * are not rewritten here.
+ * Downstream responses and filters that have already written their own response are not rewritten here.
  */
 @Component
 @Order(-2)
@@ -47,11 +46,9 @@ public class GlobalErrorConfig implements ErrorWebExceptionHandler {
         String message = resolveMessage(ex, status);
 
         if (status.is5xxServerError()) {
-            log.error("Gateway error status={} path={} msg={}",
-                    status.value(), exchange.getRequest().getPath(), ex.toString());
+            log.error("Gateway error status={} path={} msg={}", status.value(), exchange.getRequest().getPath(), ex.toString());
         } else {
-            log.warn("Gateway client error status={} path={} msg={}",
-                    status.value(), exchange.getRequest().getPath(), ex.toString());
+            log.warn("Gateway client error status={} path={} msg={}", status.value(), exchange.getRequest().getPath(), ex.toString());
         }
 
         ServerHttpResponse response = exchange.getResponse();

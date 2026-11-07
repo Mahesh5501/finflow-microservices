@@ -12,40 +12,30 @@ import java.util.Objects;
 
 /**
  * Configures gateway-level rate limiting using the shared Redis instance.
- *
- * Authenticated requests are limited by user identity.
- * Anonymous requests are limited by their network peer IP.
- *
- * Spring Cloud Gateway combines the resolved key with the route ID,
- * giving each route an independent rate-limit bucket.
+ * Authenticated requests are limited by user identity. Anonymous requests are limited by their network peer IP.
+ * Spring Cloud Gateway combines the resolved key with the route ID, giving each route an independent rate-limit bucket.
  */
 @Configuration
 public class RateLimitConfig {
 
     /**
      * Resolves the identity used to calculate a request's rate limit.
-     *
-     * A valid authenticated principal takes priority. If no usable
-     * principal exists, the network peer IP is used instead.
+     * A valid authenticated principal takes priority. If no usable principal exists, the network peer IP is used instead.
      */
     @Bean
     public KeyResolver rateLimitKeyResolver() {
         return exchange -> exchange.getPrincipal()
                 .filter(principal -> principal.getName() != null && !principal.getName().isBlank())
                 .map(principal -> "gateway:user:" + principal.getName().trim())
-                // Resolve the anonymous key only when no usable principal exists.
-                .switchIfEmpty(Mono.fromSupplier(() -> "gateway:ip:" + clientIp(exchange)));
+                .switchIfEmpty(Mono.fromSupplier(() -> "gateway:ip:" + clientIp(exchange))); // Resolve the anonymous key only when no usable principal exists.
     }
 
     /**
      * Returns the network peer address.
-     *
-     * We intentionally do not trust X-Forwarded-For here because clients
-     * can supply that header themselves unless a trusted proxy sanitizes it.
+     * We intentionally do not trust X-Forwarded-For here because clients can supply that header themselves unless a trusted proxy sanitizes it.
      */
     private static String clientIp(ServerWebExchange exchange) {
-        // Use the peer address, not an untrusted client-supplied forwarding header.
-        var remoteAddress = exchange.getRequest().getRemoteAddress();
+        var remoteAddress = exchange.getRequest().getRemoteAddress(); // Use the peer address, not an untrusted client-supplied forwarding header.
         if (remoteAddress == null || remoteAddress.getAddress() == null) {
             return "unknown";
         }
@@ -64,8 +54,6 @@ public class RateLimitConfig {
     public RedisRateLimiter rateLimiter(GatewayProperties properties) {
         GatewayProperties.RateLimit settings = properties.getRateLimit();
         // The framework's Redis-error policy currently allows traffic; see the review.
-        return new RedisRateLimiter(
-                settings.getReplenishRate(), settings.getBurstCapacity(), settings.getRequestedTokens()
-        );
+        return new RedisRateLimiter(settings.getReplenishRate(), settings.getBurstCapacity(), settings.getRequestedTokens());
     }
 }
