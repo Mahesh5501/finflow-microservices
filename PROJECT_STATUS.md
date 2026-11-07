@@ -2,7 +2,31 @@
 
 Last assessed: **2026-11-07 (Asia/Calcutta)**. Source baseline: Git commit `5d79a90` (`commit`); initial tracked working tree clean. This assessment changes documentation only.
 
-## Latest progress checkpoint - 2026-11-07 (multi-service workflow)
+## Latest progress checkpoint - 2026-11-07 (gateway retry configuration simplification)
+
+- **Last active/affected service:** api-gateway. Completed a focused simplification: src/main/resources/application.yml defines the existing retry block once with `&getRetry` and reuses it with five aliases. All routes still place CircuitBreaker before Retry; policies, paths, arguments and dependencies are unchanged.
+- **Important files:** application.yml (remove five duplicate retry blocks); api-gateway/README.md (explain the implemented anchor and preserved ordering); this status (evidence and handoff). No Java application/test source, database/API contracts, service communication or significant architectural decisions changed. Other services untouched.
+- **Executed verification:** A one-off Java source-launcher check using the gateway's packaged SnakeYAML 2.4 compared the entire pre/post parsed YAML and passed, including route/filter order and arguments. Helper/snapshot/parser files are ignored under api-gateway/target, not new application code or a committed test suite. In api-gateway, Java21 `mvn -B -o verify` passed at approximately 11:03 IST: one context-load test, zero failures/errors/skips; JAR repackaged. No new runtime probes or full-system checks; production gaps from the review remain unresolved.
+- **Baseline/next:** HEAD 09f5206. Preserved earlier uncommitted README/review/status work; this task adds the configuration edit and focused documentation updates. No staging/commit. Next meaningful production task remains defining private management-endpoint access and adding targeted security regressions, with a concrete proposal before implementation.
+
+## Previous checkpoint - 2026-11-07 (gateway learning README)
+
+- **Last active/affected service:** api-gateway. Added [api-gateway/README.md](api-gateway/README.md), a plain-English learning guide with request/sequence diagrams, route examples, file reading order, failure behavior and a proposed production-readiness/simplification roadmap.
+- **Actual scope:** Documentation only; reused the completed gateway review without repeating source analysis. Suggestions are clearly marked as not implemented. Existing application source/configuration/dependencies and architecture/decision documents remain unchanged.
+- **Verification:** README/status local links, code-fence pairing and whitespace checked with Python; Git diff reviewed for documentation-only scope. No application tests, build, runtime probes or startup commands rerun for this writing task. Earlier review evidence remains historical.
+- **Baseline/next:** HEAD 09f5206; prior uncommitted gateway-review/status work preserved. This task adds api-gateway/README.md and updates this status; no staging/commit. Next implementation remains a management-endpoint policy proposal and targeted tests, awaiting approval; no production fixes applied.
+
+## Previous checkpoint - 2026-11-07 (gateway implementation review)
+
+- **Last active/affected service:** api-gateway. Completed the requested implementation/production-readiness review: 25 tracked gateway files plus ignored HELP.md; reused existing cross-service documentation. Detailed file dispositions, source references, runtime evidence and prioritized recommendations: [docs/GATEWAY_REVIEW.md](docs/GATEWAY_REVIEW.md).
+- **Actual changes:** Added the review document and updated this status only. No application source, tests, build dependencies, configuration or business behaviour changed; no fixes implemented. Architecture/decision/dependency documents remain unchanged.
+- **Executed verification:** In api-gateway, Maven 3.9.16/Temurin Java21 `mvn -B -o verify` succeeded at approximately 10:51 IST: one context-load test, zero failures/errors/skips; JAR repackaged. This is new gateway evidence, not another execution of the historical 47-test project baseline.
+- **Additional observations:** 14 ad hoc loopback HTTP probes and one invalid nested-property startup check using two temporary gateway processes, one local mock backend and command-line-only isolation overrides; all temporary processes stopped. Reproduced anonymous metrics/Prometheus 200, route-actuator default 404, JWT rejection 401 without correlation, permissive CORS preflight, empty 413, 2 MiB chunked bypass, Redis error traffic forwarding, HTTP500 GET retried three backend calls, missing final-request logging coverage and invalid nested CORS value accepted. Evidence/provenance and untested scenarios are in the review; these probes are not committed regression tests.
+- **Verdict/pending:** Functional local/learning foundation, not verified production-ready. GW1-GW10 are suggestions awaiting review; live JWT/Redis quotas, complete breaker lifecycle, load/TLS/container/vulnerability checks remain unverified. Official Spring support/patch policy also needs an approved upgrade task.
+- **Next selected-service task:** Propose management endpoint access policy and add targeted access-control regressions before changing SecurityConfig. Streaming limit enforcement follows. Overall commerce/wallet R1/R2 priority remains recorded; other services were not changed or retested.
+- **Git baseline:** HEAD 09f5206 (agents added); prior setup docs/skills are already committed. Gateway source is unchanged from 5d79a90. This review adds untracked docs/GATEWAY_REVIEW.md and modifies PROJECT_STATUS.md only; generated evidence is ignored under api-gateway/target. No staging/commit performed during review.
+
+## Previous checkpoint - 2026-11-07 (multi-service workflow)
 
 - **Scope/completed:** Shared repository setup only; no application service implementation changed. Extended root AGENTS.md for service selection/switching, affected-service progress and dependency maintenance. Reused/updated start-project and save-progress; created targeted-code-investigation, code-change-verification and database-migration-review in canonical .agents/skills/.
 - **Important documentation:** Added docs/SERVICE_CATALOG.md (ownership/technology/entry points extracted from existing architecture), docs/SERVICE_DEPENDENCIES.md (documented communications/contracts), docs/DEVELOPMENT_WORKFLOW.md (daily use and agent compatibility). Replaced the duplicate architecture service table with a catalog link; application architecture is unchanged. Added separate service progress sections below. DATABASE_DESIGN.md and docs/DECISIONS.md remain unchanged.
@@ -60,9 +84,11 @@ These summaries reuse the initial assessment; no service was re-analysed or chan
 
 ### api-gateway
 
-- Implemented: routing/security, Redis rate limits, resilience and correlation/access logging; context-load test passed and verify succeeded historically.
-- Partial/pending: HTTP security/routing/filter/resilience integration verification; local deployment exposure review (R17/R18).
-- Next: targeted edge contract/security checks when selected. No application files changed in setup.
+- Simplification implemented: six retry blocks share one YAML anchor, preserving the complete parsed configuration. One-off equivalence check and fresh Maven verify (one context-load test) passed on 2026-11-07; production-security/failure-policy fixes remain pending.
+- Learning guide: [api-gateway/README.md](api-gateway/README.md) explains the actual request flow and proposed simpler production-readiness steps; added as documentation only, with no new application test execution.
+- Implemented: routing/security, Redis rate limits, resilience and correlation/access logging. Review completed 2026-11-07; fresh verify succeeded with one context-load test. See [file-by-file gateway review](docs/GATEWAY_REVIEW.md) for 14 additional HTTP observations and one configuration startup check.
+- Partial/pending: production access control, streaming body limits, JWT trust contract, explicit Redis/retry/breaker policies, nested validation, CORS/correlation/error coverage and deployment/version support (GW1-GW10). Anonymous metrics and chunked-limit bypass reproduced; full integration/load/security regression suite remains absent.
+- Next: management access policy plus focused regression tests, pending approval of the implementation proposal. No application fixes made during review.
 
 ### identity-service
 
@@ -130,6 +156,7 @@ Source findings below are **not reproduced exploits or concurrency tests**.
 | R16 | Medium | Sequential refresh/reset/invite checks have no locking/version protection; old outstanding invite tokens are not invalidated on reinvite and acceptance allows an already active membership. Last-admin guard is also a count-then-write race. |
 | R17 | Operational | Only wallet runs through Compose apps profile; it needs host identity. External mysql-data/redis-data volumes must already exist. Kafka advertises localhost:9092, unsuitable for other-container clients without listener changes. Gateway allows wildcard CORS and public Prometheus; local credentials/ports need deployment-specific policy. |
 | R18 | Verification | Identity/commerce/notification packaging not verified successfully. No controller/security/concurrency/real-infra regressions; existing target docs and identity role table contain claims beyond current code. |
+| R19 | Gateway production readiness | Detailed review GW1-GW10 in docs/GATEWAY_REVIEW.md. Runtime probes reproduced public metrics, chunked body-limit bypass, missing correlation/error coverage, broad retry and invalid nested config acceptance. Fixes pending; no application changes made. |
 
 ## Important files
 

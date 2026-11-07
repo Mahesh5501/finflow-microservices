@@ -27,7 +27,10 @@ spring:
                   args:
                     name: identityCb
                     fallbackUri: forward:/fallback/identity
-                - name: Retry
+                # &getRetry defines one shared block; *getRetry reuses it below.
+                # Keep Retry after each CircuitBreaker so filter nesting stays the same.
+                - &getRetry
+                  name: Retry
                   args:
                     retries: 2
                     methods: GET
@@ -46,15 +49,7 @@ spring:
                   args:
                     name: walletCb
                     fallbackUri: forward:/fallback/wallet
-                - name: Retry
-                  args:
-                    retries: 2
-                    methods: GET
-                    statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,SERVICE_UNAVAILABLE
-                    backoff:
-                      firstBackoff: 50ms
-                      maxBackoff: 200ms
-                      factor: 2
+                - *getRetry
 
             - id: identity
               uri: ${identity.uri}
@@ -65,16 +60,8 @@ spring:
                   args:
                     name: identityCb
                     fallbackUri: forward:/fallback/identity
-                # Retry only safe GETs (login/register must NOT be retried by gateway)
-                - name: Retry
-                  args:
-                    retries: 2
-                    methods: GET
-                    statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,SERVICE_UNAVAILABLE
-                    backoff:
-                      firstBackoff: 50ms
-                      maxBackoff: 200ms
-                      factor: 2
+                # Shared policy retries GET only, never login/register POSTs.
+                - *getRetry
 
             - id: wallet
               uri: ${wallet.uri}
@@ -85,15 +72,7 @@ spring:
                   args:
                     name: walletCb
                     fallbackUri: forward:/fallback/wallet
-                - name: Retry
-                  args:
-                    retries: 2
-                    methods: GET
-                    statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,SERVICE_UNAVAILABLE
-                    backoff:
-                      firstBackoff: 50ms
-                      maxBackoff: 200ms
-                      factor: 2
+                - *getRetry
 
             - id: commerce
               uri: ${commerce.uri}
@@ -104,15 +83,7 @@ spring:
                   args:
                     name: commerceCb
                     fallbackUri: forward:/fallback/commerce
-                - name: Retry
-                  args:
-                    retries: 2
-                    methods: GET
-                    statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,SERVICE_UNAVAILABLE
-                    backoff:
-                      firstBackoff: 50ms
-                      maxBackoff: 200ms
-                      factor: 2
+                - *getRetry
 
             - id: notification
               uri: ${notification.uri}
@@ -123,15 +94,7 @@ spring:
                   args:
                     name: notificationCb
                     fallbackUri: forward:/fallback/notification
-                - name: Retry
-                  args:
-                    retries: 2
-                    methods: GET
-                    statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,SERVICE_UNAVAILABLE
-                    backoff:
-                      firstBackoff: 50ms
-                      maxBackoff: 200ms
-                      factor: 2
+                - *getRetry
 
 # Resilience4j — open circuit when downstream is unhealthy
 resilience4j:
