@@ -19,10 +19,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * RS256 access JWTs + JWKS for other FinFlow services (wallet validates via public key).
- * Interview: asymmetric keys — private key stays in identity; public key is published.
- */
 @Service
 public class JwtService {
 
@@ -36,11 +32,16 @@ public class JwtService {
             @Value("${jwt.signing-key-path:.local/identity/signing-key.pk8}") String signingKeyPath,
             @Value("${jwt.generate-key-if-missing:true}") boolean generateKeyIfMissing
     ) {
+        if (accessExpirationMs <= 0) {
+            throw new IllegalArgumentException("jwt.access-expiration-ms must be greater than zero");
+        }
+
         try {
             KeyPair pair = SigningKeyStore.load(Path.of(signingKeyPath), generateKeyIfMissing);
             this.privateKey = (RSAPrivateKey) pair.getPrivate();
             this.publicKey = (RSAPublicKey) pair.getPublic();
-            // Same persisted key => same kid across restarts/replicas, without a second metadata file.
+
+            // Derive kid from the persisted public key so it remains stable across restarts.
             this.keyId = Base64.getUrlEncoder().withoutPadding()
                     .encodeToString(MessageDigest.getInstance("SHA-256").digest(publicKey.getEncoded()));
             this.accessExpirationMs = accessExpirationMs;
@@ -50,13 +51,27 @@ public class JwtService {
     }
 
     public String createAccessToken(Long userId, String email, List<Long> orgIds, List<String> permissions) {
+        if (userId == null || userId <= 0) {
+            throw new IllegalArgumentException("JWT userId must be a positive value");
+        }
+
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("JWT email must not be blank");
+        }
+
+        if (orgIds == null || permissions == null) {
+            throw new IllegalArgumentException("JWT orgIds and permissions must not be null");
+        }
+
         Instant now = Instant.now();
         return Jwts.builder()
-                .header().keyId(keyId).and()
+                .header()
+                .keyId(keyId)
+                .and()
                 .subject(String.valueOf(userId))
                 .claim("email", email)
-                .claim("orgIds", orgIds)
-                .claim("permissions", permissions)
+                .claim("orgIds", List.copyOf(orgIds))
+                .claim("permissions", List.copyOf(permissions))
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(accessExpirationMs)))
                 .signWith(privateKey, Jwts.SIG.RS256)
@@ -64,6 +79,10 @@ public class JwtService {
     }
 
     public Claims parse(String token) {
+        if (token == null || token.isBlank()) {
+            throw new IllegalArgumentException("JWT must not be blank");
+        }
+
         return Jwts.parser()
                 .verifyWith(publicKey)
                 .build()
@@ -73,17 +92,28 @@ public class JwtService {
 
     public List<String> permissions(Claims claims) {
         Object raw = claims.get("permissions");
-        if (raw instanceof Collection<?> c) {
-            return c.stream().map(String::valueOf).toList();
+
+        if (!(raw instanceof Collection<?> collection)) {
+            throw new IllegalArgumentException("JWT permissions claim is missing or invalid");
         }
-        return List.of();
+
+        return collection.stream()
+                .map(value -> {
+                    if (!(value instanceof String permission) || permission.isBlank()) {
+                        throw new IllegalArgumentException("JWT contains an invalid permission");
+                    }
+                    return permission;
+                })
+                .toList();
     }
 
     public long getAccessExpirationSeconds() {
         return accessExpirationMs / 1000;
     }
 
-    /** RFC 7517 JWKS — wallet/other services fetch this to verify access tokens. */
+    /**
+     * RFC 7517 JWKS — other FinFlow services use this public key to verify access tokens.
+     */
     public Map<String, Object> jwks() {
         Map<String, Object> jwk = new LinkedHashMap<>();
         jwk.put("kty", "RSA");
@@ -97,7 +127,8 @@ public class JwtService {
 
     private static String base64Url(BigInteger value) {
         byte[] bytes = value.toByteArray();
-        // Strip leading zero sign byte if present.
+
+        // BigInteger may add a leading zero sign byte.
         if (bytes.length > 1 && bytes[0] == 0) {
             byte[] trimmed = new byte[bytes.length - 1];
             System.arraycopy(bytes, 1, trimmed, 0, trimmed.length);

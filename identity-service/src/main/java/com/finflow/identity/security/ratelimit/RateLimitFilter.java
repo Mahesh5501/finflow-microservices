@@ -1,3 +1,4 @@
+
 package com.finflow.identity.security.ratelimit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,7 +15,10 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
 
-/** Applies rate limits to abuse-prone auth endpoints before the controller runs. */
+/**
+ * Applies rate limits to abuse-prone authentication endpoints
+ * before the controller runs.
+ */
 @Component
 public class RateLimitFilter extends OncePerRequestFilter {
 
@@ -27,7 +31,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final RateLimitService rateLimitService;
     private final ObjectMapper objectMapper;
 
-    public RateLimitFilter(RateLimitService rateLimitService, ObjectMapper objectMapper) {
+    public RateLimitFilter(
+            RateLimitService rateLimitService,
+            ObjectMapper objectMapper
+    ) {
         this.rateLimitService = rateLimitService;
         this.objectMapper = objectMapper;
     }
@@ -55,11 +62,15 @@ public class RateLimitFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    /**
+     * Uses the direct remote address by default.
+     *
+     * X-Forwarded-For is deliberately not trusted here because clients
+     * can forge it unless a trusted reverse proxy overwrites the header.
+     */
     private static String clientKey(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr() == null ? "unknown" : request.getRemoteAddr();
+        String remoteAddress = request.getRemoteAddr();
+
+        return remoteAddress == null || remoteAddress.isBlank() ? "unknown" : remoteAddress;
     }
 }

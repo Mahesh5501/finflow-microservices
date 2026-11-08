@@ -2,7 +2,20 @@
 
 Last assessed: **2026-11-08 (Asia/Calcutta)**.
 
-## Latest progress checkpoint - 2026-11-08 (gateway Postman slimmed)
+## Latest progress checkpoint - 2026-11-08 (identity Postman resend)
+
+- **Last active/affected service:** identity-service (Postman only). Added **Auth → 1b. Resend verification** (`POST /api/v1/auth/resend-verification`); test script saves `verificationToken`. Regenerated via `python postman/_gen_collections.py --identity-only`.
+- **Next:** Re-import identity collection in Postman; for unverified existing users run 1b → Verify Email → Login.
+
+## Previous checkpoint - 2026-11-08 (identity review + full tests)
+
+- **Last active/affected service:** identity-service. Cross-checked cleanup (batch `listMine`/`listMembers`, admin count query, MailService no token bodies, security packages, JWT guards). Production naming/packages look consistent; **no mass renames** — current names match FinFlow conventions (`AuthService`/`OrgService`, `AuthenticatedUser`, JWT/security packages).
+- **Test fixes (stale vs intentional validation):** `OrgServiceQueryTest` mocks `findByIdForUpdate` for last-admin path; `JwtServiceTest` uses short positive TTL for expiry + asserts positive expiry/userId; `SecurityHttpTest` crafts signed subject `"0"` because issuance rejects null/non-positive userIds.
+- **Verification:** Java 21 `mvn -B -o test` → **BUILD SUCCESS, 63 tests, 0 failures/errors/skips**. Log: `identity-service/target/identity-full-suite.log`.
+- **Still deferred (not bugs in this review):** real mail delivery, last-admin check-then-write race under concurrency, packaging OneDrive cloud-provider issue, pagination/migrations.
+- **Next:** optional gateway Postman folder 02 with identity up; or mail/hardening work if chosen.
+
+## Previous checkpoint - 2026-11-08 (gateway Postman slimmed)
 
 - **Last active/affected service:** api-gateway (Postman only). Collection reduced to **two folders**: `01 Gateway checks` (edge + one 401 sample per service family) and `02 Identity via Gateway` (Auth + Organisations on `gatewayBaseUrl`). Removed live-routing duplicates, toggle folders 03–06, known-gap TARGET cases, and related variables. **identity-service Postman collection not modified.**
 - **Important files:** `postman/_gen_extra_collections.py`; regenerated gateway collection; rewritten `api-gateway/postman/README.md`.

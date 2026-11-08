@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "FinFlow \u2014 Identity Service",
-    "description": "Select environment **FinFlow Local** (shared with Wallet).\n\nHappy path:\n1. Auth: Register \u2192 Verify Email \u2192 Login\n2. Orgs: Create Org \u2192 **1b. Login again** (JWT gets wallets:* permissions)\n3. Switch to Wallet collection \u2014 same {{accessToken}} / {{userId}}\n\nURLs use {{identityBaseUrl}} = http://localhost:18081",
+    "description": "Select environment **FinFlow Local** (shared with Wallet).\n\nHappy path:\n1. Auth: Register \u2192 Verify Email \u2192 Login\n   (If already registered but unverified: skip Register, run **1b. Resend verification** \u2192 Verify Email \u2192 Login)\n2. Orgs: Create Org \u2192 **1b. Login again** (JWT gets wallets:* permissions)\n3. Switch to Wallet collection \u2014 same {{accessToken}} / {{userId}}\n\nURLs use {{identityBaseUrl}} = http://localhost:18081",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -108,6 +108,37 @@
               "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
             },
             "url": "{{identityBaseUrl}}/api/v1/auth/register"
+          }
+        },
+        {
+          "name": "1b. Resend verification",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.token) { pm.collectionVariables.set('verificationToken', body.token); pm.environment.set('verificationToken', body.token); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}"
+            },
+            "url": "{{identityBaseUrl}}/api/v1/auth/resend-verification"
           }
         },
         {

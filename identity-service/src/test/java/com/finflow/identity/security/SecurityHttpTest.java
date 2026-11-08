@@ -4,6 +4,7 @@ import com.finflow.identity.security.jwt.JwtService;
 import com.finflow.identity.security.ratelimit.RateLimitService;
 import com.finflow.identity.dto.response.RegisterResponse;
 import com.finflow.identity.service.AuthService;
+import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -17,6 +18,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +26,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.nio.file.Path;
+import java.security.interfaces.RSAPrivateKey;
+import java.time.Instant;
+import java.util.Date;
 import java.util.List;
 
 import static org.hamcrest.Matchers.blankOrNullString;
@@ -85,7 +90,21 @@ class SecurityHttpTest {
 
     @Test
     void signedTokenWithInvalidSubjectIsRejected() throws Exception {
-        String token = jwtService.createAccessToken(null, "user@finflow.test", List.of(), List.of());
+        // createAccessToken refuses non-positive userIds; craft a still-signed JWT with subject "0"
+        // so the filter path (not issuance) is what rejects it.
+        RSAPrivateKey privateKey = (RSAPrivateKey) ReflectionTestUtils.getField(jwtService, "privateKey");
+        String keyId = (String) ReflectionTestUtils.getField(jwtService, "keyId");
+        Instant now = Instant.now();
+        String token = Jwts.builder()
+                .header().keyId(keyId).and()
+                .subject("0")
+                .claim("email", "user@finflow.test")
+                .claim("orgIds", List.of())
+                .claim("permissions", List.of())
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(900)))
+                .signWith(privateKey, Jwts.SIG.RS256)
+                .compact();
         expectUnauthorized(mvc.perform(get("/api/v1/users/me")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)));
     }

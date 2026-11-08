@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finflow.identity.security.authentication.JwtAuthFilter;
 import com.finflow.identity.security.ratelimit.RateLimitFilter;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -74,8 +75,32 @@ public class SecurityConfig {
         return http.build();
     }
 
-    private void writeSecurityError(HttpServletResponse response, int status, String code, String message)
-            throws IOException {
+    /**
+     * These filters are explicitly managed by Spring Security.
+     * Disable their separate servlet-container registration to prevent
+     * accidental execution outside the Spring Security filter chain.
+     */
+    @Bean
+    public FilterRegistrationBean<JwtAuthFilter> jwtAuthFilterRegistration() {
+        FilterRegistrationBean<JwtAuthFilter> registration = new FilterRegistrationBean<>();
+
+        registration.setFilter(jwtAuthFilter);
+        registration.setEnabled(false);
+
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration() {
+        FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>();
+
+        registration.setFilter(rateLimitFilter);
+        registration.setEnabled(false);
+
+        return registration;
+    }
+
+    private void writeSecurityError(HttpServletResponse response, int status, String code, String message) throws IOException {
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         objectMapper.writeValue(response.getOutputStream(), Map.of("code", code, "message", message));

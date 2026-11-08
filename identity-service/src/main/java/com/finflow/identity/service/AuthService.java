@@ -1,3 +1,4 @@
+
 package com.finflow.identity.service;
 
 import com.finflow.identity.dto.response.AuthenticationResponse;
@@ -31,8 +32,10 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Coordinates account and session workflows; repositories and JWT/mail collaborators keep
- * persistence, cryptography and delivery details out of the HTTP controllers.
+ * Coordinates account and session workflows.
+ *
+ * Repositories handle persistence, JwtService handles JWT operations,
+ * MailService handles email delivery, and AuditService records security events.
  */
 @Service
 public class AuthService {
@@ -97,19 +100,46 @@ public class AuthService {
         }
     }
 
+    /**
+     * Verifies an email using an atomically consumed one-time token.
+     */
     @Transactional
     public void verifyEmail(String rawToken) {
+        String tokenHash = TokenCrypto.sha256(rawToken);
+
         EmailVerificationToken token = emailVerificationTokenRepository
-                .findByTokenHash(TokenCrypto.sha256(rawToken))
-                .orElseThrow(() -> ApiException.unauthorized("INVALID_TOKEN", "Invalid or expired verification token"));
-        if (!token.isUsable()) {
+                .findByTokenHash(tokenHash)
+                .orElseThrow(() -> ApiException.unauthorized(
+                        "INVALID_TOKEN",
+                        "Invalid or expired verification token"
+                ));
+
+        // Capture the user ID before the bulk update clears the persistence context.
+        Long userId = token.getUserId();
+
+        // The database decides whether this token can still be consumed.
+        int consumed = emailVerificationTokenRepository.consumeIfUsable(tokenHash, Instant.now());
+
+        if (consumed != 1) {
             throw ApiException.unauthorized("INVALID_TOKEN", "Invalid or expired verification token");
         }
-        User user = userRepository.findById(token.getUserId())
-                .orElseThrow(() -> ApiException.unauthorized("INVALID_TOKEN", "Invalid or expired verification token"));
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> ApiException.unauthorized(
+                        "INVALID_TOKEN",
+                        "Invalid or expired verification token"
+                ));
+
         user.markEmailVerified();
-        token.markUsed();
-        auditService.record(user.getId(), null, "EMAIL_VERIFIED", "USER", String.valueOf(user.getId()), user.getEmail());
+
+        auditService.record(
+                user.getId(),
+                null,
+                "EMAIL_VERIFIED",
+                "USER",
+                String.valueOf(user.getId()),
+                user.getEmail()
+        );
     }
 
     @Transactional
@@ -118,7 +148,7 @@ public class AuthService {
         String normalized = normalizeEmail(email);
         return userRepository.findByEmail(normalized)
                 .filter(User::isActive)
-                .filter(u -> !u.isEmailVerified())
+                .filter(user -> !user.isEmailVerified())
                 .map(user -> {
                     String raw = issueEmailVerification(user);
                     return new DevTokenResponse(message, mailService.isEnabled() ? null : raw);
@@ -130,27 +160,80 @@ public class AuthService {
     public AuthenticationResponse login(String email, String password) {
         String normalized = normalizeEmail(email);
         User user = userRepository.findByEmail(normalized)
-                .orElseThrow(() -> ApiException.unauthorized("INVALID_CREDENTIALS", "Invalid email or password"));
+                .orElseThrow(() -> ApiException.unauthorized(
+                        "INVALID_CREDENTIALS",
+                        "Invalid email or password"
+                ));
 
         if (!user.isActive() || !passwordEncoder.matches(password, user.getPasswordHash())) {
-            throw ApiException.unauthorized("INVALID_CREDENTIALS", "Invalid email or password");
+            throw ApiException.unauthorized(
+                    "INVALID_CREDENTIALS",
+                    "Invalid email or password"
+            );
         }
+
         if (!user.isEmailVerified()) {
-            throw ApiException.unauthorized("EMAIL_NOT_VERIFIED", "Verify your email before login");
+            throw ApiException.unauthorized(
+                    "EMAIL_NOT_VERIFIED",
+                    "Verify your email before login"
+            );
         }
+
         AuthenticationResponse tokens = issueTokens(user);
-        auditService.record(user.getId(), null, "LOGIN_SUCCESS", "USER", String.valueOf(user.getId()), normalized);
+
+        auditService.record(
+                user.getId(),
+                null,
+                "LOGIN_SUCCESS",
+                "USER",
+                String.valueOf(user.getId()),
+                normalized
+        );
+
         return tokens;
     }
 
+    /**
+     * Rotates a refresh token exactly once.
+     *
+     * The conditional database UPDATE is the authoritative check.
+     * A preceding SELECT only obtains the user ID.
+     */
     @Transactional
     public AuthenticationResponse refresh(String rawRefreshToken) {
-        RefreshToken stored = requireUsableRefresh(rawRefreshToken);
-        stored.revoke();
-        User user = userRepository.findById(stored.getUserId())
-                .orElseThrow(() -> ApiException.unauthorized("INVALID_TOKEN", "Invalid refresh token"));
+        String tokenHash = TokenCrypto.sha256(rawRefreshToken);
+
+        RefreshToken stored = refreshTokenRepository.findByTokenHash(tokenHash)
+                .orElseThrow(() -> ApiException.unauthorized(
+                        "INVALID_TOKEN",
+                        "Invalid refresh token"
+                ));
+
+        Long userId = stored.getUserId();
+
+        int consumed = refreshTokenRepository.consumeIfUsable(
+                tokenHash,
+                Instant.now()
+        );
+
+        if (consumed != 1) {
+            throw ApiException.unauthorized(
+                    "INVALID_TOKEN",
+                    "Invalid refresh token"
+            );
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> ApiException.unauthorized(
+                        "INVALID_TOKEN",
+                        "Invalid refresh token"
+                ));
+
         if (!user.isActive() || !user.isEmailVerified()) {
-            throw ApiException.unauthorized("INVALID_TOKEN", "Invalid refresh token");
+            throw ApiException.unauthorized(
+                    "INVALID_TOKEN",
+                    "Invalid refresh token"
+            );
         }
         return issueTokens(user);
     }
@@ -169,43 +252,102 @@ public class AuthService {
                 .filter(User::isActive)
                 .map(user -> {
                     String rawResetToken = TokenCrypto.newRawToken();
-                    passwordResetTokenRepository.save(new PasswordResetToken(
-                            user.getId(),
-                            TokenCrypto.sha256(rawResetToken),
-                            Instant.now().plusMillis(passwordResetExpirationMs)
-                    ));
-                    mailService.send(user.getEmail(), "FinFlow password reset", "Reset token: " + rawResetToken);
-                    return new DevTokenResponse(message, mailService.isEnabled() ? null : rawResetToken);
+
+                    passwordResetTokenRepository.save(
+                            new PasswordResetToken(
+                                    user.getId(),
+                                    TokenCrypto.sha256(rawResetToken),
+                                    Instant.now().plusMillis(passwordResetExpirationMs)
+                            )
+                    );
+
+                    mailService.send(
+                            user.getEmail(),
+                            "FinFlow password reset",
+                            "Reset token: " + rawResetToken
+                    );
+
+                    return new DevTokenResponse(
+                            message,
+                            mailService.isEnabled() ? null : rawResetToken
+                    );
                 })
                 .orElseGet(() -> new DevTokenResponse(message, null));
     }
 
+    /**
+     * Resets a password using an atomically consumed one-time token.
+     *
+     * Token consumption, password update, refresh-token revocation and audit recording participate in the same transaction.
+     */
     @Transactional
     public void resetPassword(String rawResetToken, String newPassword) {
+        String tokenHash = TokenCrypto.sha256(rawResetToken);
+
         PasswordResetToken token = passwordResetTokenRepository
-                .findByTokenHash(TokenCrypto.sha256(rawResetToken))
-                .orElseThrow(() -> ApiException.unauthorized("INVALID_TOKEN", "Invalid or expired reset token"));
-        if (!token.isUsable()) {
-            throw ApiException.unauthorized("INVALID_TOKEN", "Invalid or expired reset token");
+                .findByTokenHash(tokenHash)
+                .orElseThrow(() -> ApiException.unauthorized(
+                        "INVALID_TOKEN",
+                        "Invalid or expired reset token"
+                ));
+
+        // Capture the user ID before the bulk update clears the persistence context.
+        Long userId = token.getUserId();
+
+        int consumed = passwordResetTokenRepository.consumeIfUsable(
+                tokenHash,
+                Instant.now()
+        );
+
+        if (consumed != 1) {
+            throw ApiException.unauthorized(
+                    "INVALID_TOKEN",
+                    "Invalid or expired reset token"
+            );
         }
-        User user = userRepository.findById(token.getUserId())
-                .orElseThrow(() -> ApiException.unauthorized("INVALID_TOKEN", "Invalid or expired reset token"));
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> ApiException.unauthorized(
+                        "INVALID_TOKEN",
+                        "Invalid or expired reset token"
+                ));
+
         user.changePassword(passwordEncoder.encode(newPassword));
-        token.markUsed();
+
         refreshTokenRepository.revokeAllForUser(user.getId());
-        auditService.record(user.getId(), null, "PASSWORD_RESET", "USER", String.valueOf(user.getId()), null);
+
+        auditService.record(
+                user.getId(),
+                null,
+                "PASSWORD_RESET",
+                "USER",
+                String.valueOf(user.getId()),
+                null
+        );
     }
 
     @Transactional
     public void changePassword(Long userId, String currentPassword, String newPassword) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> ApiException.notFound("User not found: " + userId));
+
         if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
-            throw ApiException.unauthorized("INVALID_CREDENTIALS", "Current password is incorrect");
+            throw ApiException.unauthorized(
+                    "INVALID_CREDENTIALS",
+                    "Current password is incorrect"
+            );
         }
         user.changePassword(passwordEncoder.encode(newPassword));
         refreshTokenRepository.revokeAllForUser(userId);
-        auditService.record(userId, null, "PASSWORD_CHANGED", "USER", String.valueOf(userId), null);
+
+        auditService.record(
+                userId,
+                null,
+                "PASSWORD_CHANGED",
+                "USER",
+                String.valueOf(userId),
+                null
+        );
     }
 
     @Transactional(readOnly = true)
@@ -213,31 +355,60 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> ApiException.notFound("User not found: " + userId));
         OrgAccess access = loadOrgAccess(userId);
-        return toUserProfileResponse(user, access.orgIds(), access.permissions());
+
+        return toUserProfileResponse(
+                user,
+                access.orgIds(),
+                access.permissions()
+        );
     }
 
+    /**
+     * Creates and persists a one-time email verification token. Only its hash is stored in the database.
+     */
     private String issueEmailVerification(User user) {
         String rawVerificationToken = TokenCrypto.newRawToken();
-        emailVerificationTokenRepository.save(new EmailVerificationToken(
-                user.getId(),
-                TokenCrypto.sha256(rawVerificationToken),
-                Instant.now().plusMillis(emailVerificationExpirationMs)
-        ));
-        mailService.send(user.getEmail(), "Verify your FinFlow email", "Verification token: " + rawVerificationToken);
+
+        emailVerificationTokenRepository.save(
+                new EmailVerificationToken(
+                        user.getId(),
+                        TokenCrypto.sha256(rawVerificationToken),
+                        Instant.now().plusMillis(emailVerificationExpirationMs)
+                )
+        );
+
+        mailService.send(
+                user.getEmail(),
+                "Verify your FinFlow email",
+                "Verification token: " + rawVerificationToken
+        );
+
         return rawVerificationToken;
     }
 
+    /**
+     * Creates a short-lived access JWT and a persisted opaque refresh token.
+     * The database stores only the SHA-256 hash of the refresh token.
+     */
     private AuthenticationResponse issueTokens(User user) {
         OrgAccess access = loadOrgAccess(user.getId());
+
         String accessJwt = jwtService.createAccessToken(
-                user.getId(), user.getEmail(), access.orgIds(), access.permissions()
+                user.getId(),
+                user.getEmail(),
+                access.orgIds(),
+                access.permissions()
         );
         String rawRefreshToken = TokenCrypto.newRawToken();
-        refreshTokenRepository.save(new RefreshToken(
-                user.getId(),
-                TokenCrypto.sha256(rawRefreshToken),
-                Instant.now().plusMillis(refreshExpirationMs)
-        ));
+
+        refreshTokenRepository.save(
+                new RefreshToken(
+                        user.getId(),
+                        TokenCrypto.sha256(rawRefreshToken),
+                        Instant.now().plusMillis(refreshExpirationMs)
+                )
+        );
+
         return new AuthenticationResponse(
                 accessJwt,
                 rawRefreshToken,
@@ -250,35 +421,40 @@ public class AuthService {
         );
     }
 
+    /**
+     * Builds the user's current organisation access information.
+     *
+     * Permissions are currently unioned across active memberships.
+     * They are not scoped to individual organisations in this JWT model.
+     */
     private OrgAccess loadOrgAccess(Long userId) {
         List<Membership> memberships = membershipRepository.findByUserIdAndStatus(
-                userId, MembershipStatus.ACTIVE
+                userId,
+                MembershipStatus.ACTIVE
         );
-        List<Long> orgIds = memberships.stream().map(Membership::getOrgId).distinct().toList();
+
+        List<Long> orgIds = memberships.stream()
+                .map(Membership::getOrgId)
+                .distinct()
+                .toList();
+
         LinkedHashSet<String> permissions = new LinkedHashSet<>();
-        // A LinkedHashSet removes duplicate permissions while keeping deterministic encounter order.
-        // Permissions are still unioned across memberships; this does not introduce per-org role claims.
+
         for (Membership membership : memberships) {
             permissions.addAll(membership.getRole().permissions());
         }
-        return new OrgAccess(orgIds, List.copyOf(permissions));
-    }
 
-    private RefreshToken requireUsableRefresh(String rawRefreshToken) {
-        RefreshToken stored = refreshTokenRepository
-                .findByTokenHash(TokenCrypto.sha256(rawRefreshToken))
-                .orElseThrow(() -> ApiException.unauthorized("INVALID_TOKEN", "Invalid refresh token"));
-        if (!stored.isUsable()) {
-            throw ApiException.unauthorized("INVALID_TOKEN", "Invalid refresh token");
-        }
-        return stored;
+        return new OrgAccess(
+                orgIds,
+                List.copyOf(permissions)
+        );
     }
 
     private static String normalizeEmail(String email) {
         if (email == null || email.isBlank()) {
             throw new IllegalArgumentException("Email is required");
         }
-        // Email identifiers must not depend on the machine's default locale.
+
         return email.trim().toLowerCase(Locale.ROOT);
     }
 

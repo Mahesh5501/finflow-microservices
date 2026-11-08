@@ -16,16 +16,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.List;
 
-/**
- * Request flow step 1 for protected APIs:
- * <pre>
- *   Authorization: Bearer &lt;accessJwt&gt;
- *        → parse JWT
- *        → put {@link AuthenticatedUser} into SecurityContext
- *        → controller reads authentication.getPrincipal()
- * </pre>
- * Invalid/missing token → leave context empty; SecurityConfig then returns 401.
- */
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
 
@@ -44,21 +34,49 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (header != null && header.startsWith("Bearer ")) {
             try {
-                Claims claims = jwtService.parse(header.substring(7));
-                Long userId = Long.valueOf(claims.getSubject());
+                String token = header.substring(7).trim();
+
+                if (token.isEmpty()) {
+                    throw new IllegalArgumentException("Bearer token is empty");
+                }
+
+                Claims claims = jwtService.parse(token);
+
+                String subject = claims.getSubject();
+                if (subject == null || subject.isBlank()) {
+                    throw new IllegalArgumentException("JWT subject is missing");
+                }
+
+                Long userId = Long.valueOf(subject);
+                if (userId <= 0) {
+                    throw new IllegalArgumentException("JWT subject must be a positive user ID");
+                }
+
                 String email = claims.get("email", String.class);
+                if (email == null || email.isBlank()) {
+                    throw new IllegalArgumentException("JWT email claim is missing");
+                }
+
                 List<String> permissions = jwtService.permissions(claims);
 
-                var caller = new AuthenticatedUser(userId, email, permissions);
-                // Same authority strings as wallet/gateway claims (e.g. wallets:read).
-                var auth = new UsernamePasswordAuthenticationToken(
+                AuthenticatedUser caller = new AuthenticatedUser(
+                        userId,
+                        email,
+                        permissions
+                );
+
+                var authentication = new UsernamePasswordAuthenticationToken(
                         caller,
                         null,
-                        AuthorityUtils.createAuthorityList(permissions.toArray(String[]::new))
+                        AuthorityUtils.createAuthorityList(
+                                permissions.toArray(String[]::new)
+                        )
                 );
-                SecurityContextHolder.getContext().setAuthentication(auth);
+
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+
             } catch (Exception ignored) {
-                // Bad token → unauthenticated; do not fail the filter chain here.
+                // Invalid token must never leave an authenticated context behind.
                 SecurityContextHolder.clearContext();
             }
         }

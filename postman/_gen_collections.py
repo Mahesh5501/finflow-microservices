@@ -69,6 +69,7 @@ def main(*, identity_only=False) -> None:
                 "Select environment **FinFlow Local** (shared with Wallet).\n\n"
                 "Happy path:\n"
                 "1. Auth: Register → Verify Email → Login\n"
+                "   (If already registered but unverified: skip Register, run **1b. Resend verification** → Verify Email → Login)\n"
                 "2. Orgs: Create Org → **1b. Login again** (JWT gets wallets:* permissions)\n"
                 "3. Switch to Wallet collection — same {{accessToken}} / {{userId}}\n\n"
                 "URLs use {{identityBaseUrl}} = http://localhost:18081"
@@ -129,6 +130,32 @@ def main(*, identity_only=False) -> None:
                                 "raw": '{\n  "email": "{{email}}",\n  "password": "{{password}}"\n}',
                             },
                             "url": "{{identityBaseUrl}}/api/v1/auth/register",
+                        },
+                    },
+                    {
+                        "name": "1b. Resend verification",
+                        "event": [
+                            {
+                                "listen": "test",
+                                "script": {
+                                    "type": "text/javascript",
+                                    "exec": [
+                                        "if (pm.response.code === 200) {",
+                                        "  const body = pm.response.json();",
+                                        "  if (body.token) { pm.collectionVariables.set('verificationToken', body.token); pm.environment.set('verificationToken', body.token); }",
+                                        "}",
+                                    ],
+                                },
+                            }
+                        ],
+                        "request": {
+                            "method": "POST",
+                            "header": json_ct(),
+                            "body": {
+                                "mode": "raw",
+                                "raw": '{\n  "email": "{{email}}"\n}',
+                            },
+                            "url": "{{identityBaseUrl}}/api/v1/auth/resend-verification",
                         },
                     },
                     {

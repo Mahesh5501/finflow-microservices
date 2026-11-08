@@ -127,11 +127,31 @@ class JwtServiceTest {
     }
 
     @Test
-    void persistenceDoesNotDisableTokenExpiry() {
+    void accessExpirationMustBePositive() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new JwtService(0, directory.resolve("zero.pk8").toString(), true));
+        assertThrows(IllegalArgumentException.class,
+                () -> new JwtService(-1000, directory.resolve("negative.pk8").toString(), true));
+    }
+
+    @Test
+    void createAccessTokenRejectsNonPositiveUserId() {
+        JwtService jwt = service(directory.resolve("userid.pk8"), true);
+        assertThrows(IllegalArgumentException.class,
+                () -> jwt.createAccessToken(null, "user@finflow.test", List.of(), List.of()));
+        assertThrows(IllegalArgumentException.class,
+                () -> jwt.createAccessToken(0L, "user@finflow.test", List.of(), List.of()));
+    }
+
+    @Test
+    void persistenceDoesNotDisableTokenExpiry() throws Exception {
         Path file = directory.resolve("expired.pk8");
-        JwtService expired = new JwtService(-1000, file.toString(), true);
+        // Short positive TTL; negative expiry is rejected at construction.
+        JwtService shortLived = new JwtService(1, file.toString(), true);
+        String accessToken = token(shortLived);
+        TimeUnit.MILLISECONDS.sleep(50);
         JwtService restarted = service(file, false);
-        assertThrows(ExpiredJwtException.class, () -> restarted.parse(token(expired)));
+        assertThrows(ExpiredJwtException.class, () -> restarted.parse(accessToken));
     }
 
     @Test

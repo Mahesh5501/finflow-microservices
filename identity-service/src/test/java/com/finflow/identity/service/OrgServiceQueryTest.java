@@ -130,11 +130,16 @@ class OrgServiceQueryTest {
     @Test
     void lastAdminProtectionUsesDatabaseCountWithoutLoadingAllMembers() {
         Membership admin = authorizeAdmin();
+        when(orgRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(organisation(7L)));
         when(membershipRepository.countByOrgIdAndStatusAndRole(7L, MembershipStatus.ACTIVE, OrgRole.ORG_ADMIN))
                 .thenReturn(1L);
 
-        assertThrows(IllegalArgumentException.class, () -> service.removeMember(10L, 7L, 10L));
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.removeMember(10L, 7L, 10L)
+        );
 
+        assertEquals("Cannot remove or demote the last ORG_ADMIN", exception.getMessage());
         assertTrue(admin.isActive());
         verify(membershipRepository).countByOrgIdAndStatusAndRole(7L, MembershipStatus.ACTIVE, OrgRole.ORG_ADMIN);
         verify(membershipRepository, never()).findByOrgIdAndStatus(7L, MembershipStatus.ACTIVE);
