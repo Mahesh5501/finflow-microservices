@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.Getter;
 
 import java.time.Instant;
 
@@ -13,6 +14,7 @@ import java.time.Instant;
  * Organisation workspace used by memberships and commerce access.
  * Wallets remain user-owned; this entity does not change wallet ownership.
  */
+@Getter
 @Entity
 @Table(name = "organisation") // keep existing table name if DB already created
 public class Org {
@@ -34,17 +36,5 @@ public class Org {
     public Org(String name) {
         this.name = name;
         this.createdAt = Instant.now();
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
     }
 }

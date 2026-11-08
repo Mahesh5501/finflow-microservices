@@ -1,5 +1,6 @@
 package com.finflow.identity.exception;
 
+import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
 /**
@@ -7,6 +8,7 @@ import org.springframework.http.HttpStatus;
  * Interview: map {@code code} + HTTP status in a single {@code @RestControllerAdvice}
  * instead of one exception class per error type.
  */
+@Getter
 public class ApiException extends RuntimeException {
 
     private final HttpStatus status;
@@ -16,14 +18,6 @@ public class ApiException extends RuntimeException {
         super(message);
         this.status = status;
         this.code = code;
-    }
-
-    public HttpStatus getStatus() {
-        return status;
-    }
-
-    public String getCode() {
-        return code;
     }
 
     public static ApiException conflict(String code, String message) {

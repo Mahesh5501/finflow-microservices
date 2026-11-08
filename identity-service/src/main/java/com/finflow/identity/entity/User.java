@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import lombok.Getter;
 
 import java.time.Instant;
 
@@ -16,6 +17,7 @@ import java.time.Instant;
  * Platform user (auth identity).
  * Interview: store BCrypt hash only; unique email for login.
  */
+@Getter
 @Entity
 @Table(
         name = "app_user",
@@ -67,29 +69,5 @@ public class User {
 
     public void markEmailVerified() {
         this.emailVerified = true;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    public UserStatus getStatus() {
-        return status;
-    }
-
-    public boolean isEmailVerified() {
-        return emailVerified;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
     }
 }

@@ -6,10 +6,12 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.Getter;
 
 import java.time.Instant;
 
 /** One-time email verification token (hashed). */
+@Getter
 @Entity
 @Table(name = "email_verification_token")
 public class EmailVerificationToken {
@@ -51,9 +53,5 @@ public class EmailVerificationToken {
 
     public void markUsed() {
         this.used = true;
-    }
-
-    public Long getUserId() {
-        return userId;
     }
 }

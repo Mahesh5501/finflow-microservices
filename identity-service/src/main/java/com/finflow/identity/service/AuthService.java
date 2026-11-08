@@ -264,7 +264,16 @@ public class AuthService {
                     mailService.send(
                             user.getEmail(),
                             "FinFlow password reset",
-                            "Reset token: " + rawResetToken
+                            """
+                            You requested a FinFlow password reset.
+
+                            Paste this reset token into Postman (Auth → Reset Password)
+                            or your client reset-password API:
+
+                            %s
+
+                            If you did not request this, ignore this message.
+                            """.formatted(rawResetToken).stripIndent().trim()
                     );
 
                     return new DevTokenResponse(
@@ -380,7 +389,16 @@ public class AuthService {
         mailService.send(
                 user.getEmail(),
                 "Verify your FinFlow email",
-                "Verification token: " + rawVerificationToken
+                """
+                Welcome to FinFlow.
+
+                Confirm this email address by pasting the verification token into Postman
+                (Identity → Auth → Verify Email), or your client verify-email API:
+
+                %s
+
+                If you did not register, ignore this message.
+                """.formatted(rawVerificationToken).stripIndent().trim()
         );
 
         return rawVerificationToken;

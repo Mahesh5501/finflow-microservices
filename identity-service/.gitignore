@@ -36,3 +36,8 @@ build/
 .local/
 *.pk8
 *.pk8.lock
+
+# Local SMTP (copy from application-local.properties.example)
+application-local.properties
+
+

@@ -28,3 +28,4 @@ Thumbs.db
 .local/
 *.pk8
 *.pk8.lock
+identity-service/application-local.properties

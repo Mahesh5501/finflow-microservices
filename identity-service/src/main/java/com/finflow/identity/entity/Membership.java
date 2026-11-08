@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import lombok.Getter;
 
 import java.time.Instant;
 
@@ -22,6 +23,7 @@ import java.time.Instant;
  * remove member  → REMOVED
  * </pre>
  */
+@Getter
 @Entity
 @Table(
         name = "membership",
@@ -99,29 +101,5 @@ public class Membership {
 
     public boolean isInvited() {
         return status == MembershipStatus.INVITED;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public Long getUserId() {
-        return userId;
-    }
-
-    public Long getOrgId() {
-        return orgId;
-    }
-
-    public OrgRole getRole() {
-        return role;
-    }
-
-    public MembershipStatus getStatus() {
-        return status;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
     }
 }

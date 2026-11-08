@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.Getter;
 
 import java.time.Instant;
 
@@ -14,6 +15,7 @@ import java.time.Instant;
  * Flow: login/refresh → save hash; logout/password-change → revoke.
  * Interview: access JWT short-lived; refresh is rotatable + revocable.
  */
+@Getter
 @Entity
 @Table(name = "refresh_token")
 public class RefreshToken {
@@ -55,25 +57,5 @@ public class RefreshToken {
 
     public void revoke() {
         this.revoked = true;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public Long getUserId() {
-        return userId;
-    }
-
-    public String getTokenHash() {
-        return tokenHash;
-    }
-
-    public Instant getExpiresAt() {
-        return expiresAt;
-    }
-
-    public boolean isRevoked() {
-        return revoked;
     }
 }

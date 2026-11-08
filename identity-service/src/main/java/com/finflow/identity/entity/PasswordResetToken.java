@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.Getter;
 
 import java.time.Instant;
 
@@ -13,6 +14,7 @@ import java.time.Instant;
  * One-time forgot-password token (hashed in DB).
  * Flow: forgot-password → create; reset-password → mark used + change password.
  */
+@Getter
 @Entity
 @Table(name = "password_reset_token")
 public class PasswordResetToken {
@@ -54,9 +56,5 @@ public class PasswordResetToken {
 
     public void markUsed() {
         this.used = true;
-    }
-
-    public Long getUserId() {
-        return userId;
     }
 }

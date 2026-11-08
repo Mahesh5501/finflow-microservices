@@ -55,7 +55,8 @@
 
 - Preserve `com.finflow.apigateway`, `com.finflow.identity`, `com.finflow.wallet`, `com.finflow.commerce`, and `com.finflow.notification` package roots.
 - Follow current four-space Java formatting, explicit imports, constructor injection, PascalCase types, camelCase members, uppercase enum/constants, and records for request/response DTOs.
-- api-gateway may use Lombok narrowly (`@Getter`/`@Setter` on configuration properties, `@RequiredArgsConstructor` for single-dependency beans, `@Slf4j` for loggers). Do not use `@Data`. Other services stay Lombok-free unless explicitly approved.
+- api-gateway may use Lombok narrowly (`@Getter`/`@Setter` on configuration properties, `@RequiredArgsConstructor` for single-dependency beans, `@Slf4j` for loggers). Do not use `@Data`.
+- identity-service may use Lombok for `@Getter` on entities/`ApiException` and `@Slf4j` for loggers only. Keep **explicit constructors** for Spring injection (no `@RequiredArgsConstructor`) so dependencies stay visible while learning. Do not use `@Data`. Other services stay Lombok-free unless explicitly approved.
 - Controllers handle HTTP, validation, caller extraction and DTO mapping. Services orchestrate use cases and local transaction boundaries. Repositories remain Spring Data interfaces. Keep entity invariants near domain data.
 - Identity owns identities/memberships/tokens/audit; wallet owns balance/history/transfers; commerce owns products/carts/orders/returns/payment work; notification owns inbox records. Do not access another service's database.
 - Preserve `PaymentPort` and its conditional adapters and `CommerceEventPublisher` implementations. Do not add a second competing payment path.

@@ -21,7 +21,7 @@ Assessment date: 2026-11-07. These are observations of code/configuration, **not
 | Separate payment outcomes | PaymentOutcome and OrderStatus | Explicit source rationale keeps decline and uncertain/manual-action outcomes distinct; uncertain calls retain stock. Expiry semantics still need reconciliation. |
 | Optional Kafka, log publisher fallback | Conditional event configs/listener; main properties | Supports local execution with Kafka disabled. Logging publisher does not invoke notification in process. No durable event-delivery guarantee. |
 | Consumer dedupe by event type + order | NotificationRecord unique constraint and dispatcher | Source explicitly aims to suppress Kafka redelivery. Sequential duplicate suppression tested, concurrency and real delivery not proven. |
-| Log-only mail and development token exposure | Both mail classes; AuthService/OrgService | Source explicitly calls this a learning/local hook. Enabling the property does not add SMTP; SENT is not provider confirmation. |
+| Identity SMTP via optional local file; notification mail still stub | identity MailService + spring-mail; application-local.properties | Identity sends SMTP when `mail.enabled=true` (local file or deploy config); default off with API token exposure. Notification delivery remains a stub. |
 | Hibernate-managed schema and H2 tests | Main ddl-auto=update; test create-drop | Existing implementation choice. Original reason and production suitability not established; no migration tool/baseline. |
 | Non-root Java 21 containers, skip tests at image build | All Dockerfiles | Runtime UID/GID 10001; Maven build stage skips tests. Reason for skip policy is not documented. |
 | Local Maven Central mirror | Gateway/identity/wallet .mvn/maven.config and settings; commerce settings without selector | Identity settings comment explicitly avoids company Nexus 401 for public dependencies. Notification has no corresponding settings; Docker build excludes these files. |
@@ -58,3 +58,11 @@ At the user's request, removed identity-service/src/main/resources/application-p
 ## 2026-11-07: Lombok only in api-gateway where accessors/constructors/loggers are pure boilerplate
 
 At the user's request, added optional Lombok to api-gateway and applied it only where it removed clear boilerplate: `@Getter`/`@Setter` on `GatewayProperties` (and nested bindable types), `@RequiredArgsConstructor` on `SecurityConfig`/`GlobalErrorConfig`, and `@Slf4j` on logging classes. Filters/config beans without fields were left explicit. `@Data` is avoided. Other FinFlow services remain Lombok-free; DTOs continue to prefer records.
+
+## 2026-11-08: Identity SMTP simplified to one local file
+
+Identity sends plain-text mail via JavaMailSender when `mail.enabled=true`. Local setup is only gitignored `application-local.properties` (from `*.example`), auto-imported on normal start. Removed `mail` profile, `mail-secrets.env`, and `run-with-mail.ps1`. Default remains off (Postman tokens). Tests keep `mail.enabled=false`. Notification mail unchanged.
+
+## 2026-11-08: Identity narrow Lombok (user-approved)
+
+Identity uses Lombok only for `@Getter` (entities/`ApiException`) and `@Slf4j`. Explicit constructors kept for DI visibility — no `@RequiredArgsConstructor`. No `@Data`. DTOs remain records.

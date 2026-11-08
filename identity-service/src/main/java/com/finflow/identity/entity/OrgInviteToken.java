@@ -8,10 +8,12 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.Getter;
 
 import java.time.Instant;
 
 /** Invite-by-link token for org onboarding (hashed). */
+@Getter
 @Entity
 @Table(name = "org_invite_token")
 public class OrgInviteToken {
@@ -62,17 +64,5 @@ public class OrgInviteToken {
 
     public void markUsed() {
         this.used = true;
-    }
-
-    public Long getOrgId() {
-        return orgId;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public OrgRole getRole() {
-        return role;
     }
 }

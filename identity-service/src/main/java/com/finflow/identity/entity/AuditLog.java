@@ -6,10 +6,12 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.Getter;
 
 import java.time.Instant;
 
 /** Append-only audit trail for compliance (who did what). */
+@Getter
 @Entity
 @Table(name = "audit_log")
 public class AuditLog {
@@ -58,37 +60,5 @@ public class AuditLog {
         this.resourceId = resourceId;
         this.details = details;
         this.createdAt = Instant.now();
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public Long getActorUserId() {
-        return actorUserId;
-    }
-
-    public Long getOrgId() {
-        return orgId;
-    }
-
-    public String getAction() {
-        return action;
-    }
-
-    public String getResourceType() {
-        return resourceType;
-    }
-
-    public String getResourceId() {
-        return resourceId;
-    }
-
-    public String getDetails() {
-        return details;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
     }
 }

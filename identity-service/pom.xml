@@ -45,6 +45,12 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- Optional SMTP delivery when mail.enabled=true (JavaMailSender) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
         <!-- Shared infra Redis — auth endpoint rate limits (same docker Redis as gateway) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -80,6 +86,13 @@
             <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Narrow use: @Getter entities, @Slf4j — never @Data / @RequiredArgsConstructor (keep visible DI) -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

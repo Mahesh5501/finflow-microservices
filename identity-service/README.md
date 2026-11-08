@@ -108,7 +108,7 @@ The [interview question bank](../docs/Java%20Backend%20Interview%20Master%20Ques
 | Read-only transactions | Organisation read methods | Keep related reads inside an existing service transaction. This is not a guarantee of production concurrency correctness. |
 | LinkedHashSet | JWT permission collection | Remove duplicates while retaining encounter order. Flat permissions remain a union across memberships. |
 | Locale.ROOT | Account/invitation email normalization | Server locale must not change the interpretation of email identifiers. |
-| Token-safe diagnostics | MailService.send | Retain a stub diagnostic without logging message bodies that contain secrets. |
+| Token-safe mail | MailService.send | SMTP when enabled; otherwise skip send. Never log token-bearing bodies. |
 
 SOLID is guidance about responsibilities and dependencies, not a reason to create an interface, factory or strategy for every class. This pass adds no application class, generic manager, inheritance hierarchy, cache, parallel stream, messaging integration or new dependency. Token repositories/entities and login/register DTOs stay separate because their workflows and persistence contracts are distinct. API paths, response fields, schema and role permissions were preserved.
 
@@ -132,7 +132,7 @@ Security guidance: [OWASP Authentication](https://cheatsheetseries.owasp.org/che
 ## Production gaps confirmed in source
 
 1. **Restart persistence implemented:** JwtService loads a durable RSA private key via SigningKeyStore and derives a stable kid from its public key. See setup below. Rotation with overlapping keys, managed KMS/HSM storage and issuer/audience checks remain separate production work; consumer claim changes require agreement with gateway/wallet/commerce/notification.
-2. MailService remains a logging stub; its duplicated branches were simplified and message bodies are now omitted to avoid logging one-time tokens. `mail.enabled=true` does not send real email. Default false additionally returns verification/reset/invite tokens in API responses. Implement real delivery and separate explicit local-development token exposure before deployment; flipping the flag alone breaks real onboarding/recovery delivery.
+2. Mail: default off (Postman gets tokens in JSON). For SMTP, copy `application-local.properties.example` → `application-local.properties`, fill host/user/password, start identity normally. Register → `token` is null → read mail (Ethereal mailbox or real inbox) → Verify Email. Never commit `application-local.properties`.
 3. Logout/reset/change-password revoke refresh tokens, not existing access JWTs. Membership role/removal changes also leave previously issued claims usable until expiry. Define the required invalidation window rather than promise immediate revocation.
 4. Permissions are unioned across active memberships; orgIds and permissions do not encode a separate role per organisation. Review tenant-specific authorization with consumers before claiming tenant isolation.
 5. Rate limiting covers login/forgot/resend only; it trusts client X-Forwarded-For and uses separate Redis increment/expire commands with no explicit Redis-failure policy. Proxy trust, atomic expiry and broader abuse controls need a focused task.

@@ -1,32 +1,60 @@
 package com.finflow.identity.mail;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
 /**
- * Local mail stub: no SMTP/provider delivery is implemented for either flag value.
- * The existing mail.enabled flag also controls whether callers expose local development tokens.
- * Accept message content for the future delivery adapter, but never log token-bearing bodies.
+ * Sends mail when {@code mail.enabled=true}. When off, skips send so APIs can return tokens for Postman.
+ * Never log message bodies — they contain one-time secrets.
  */
+@Slf4j
 @Service
 public class MailService {
 
-    private static final Logger log = LoggerFactory.getLogger(MailService.class);
-
     private final boolean enabled;
+    private final String from;
+    private final ObjectProvider<JavaMailSender> mailSender;
 
-    public MailService(@Value("${mail.enabled:false}") boolean enabled) {
+    public MailService(
+            @Value("${mail.enabled:false}") boolean enabled,
+            @Value("${mail.from:}") String from,
+            ObjectProvider<JavaMailSender> mailSender
+    ) {
         this.enabled = enabled;
+        this.from = from == null ? "" : from.trim();
+        this.mailSender = mailSender;
     }
 
     public void send(String to, String subject, String body) {
-        String mode = enabled ? "enabled stub" : "dev/log only";
-        // Keep the diagnostic without leaking verification/reset/invite tokens from body.
-        log.info("MAIL ({}) to={} subject={} delivery=not-implemented", mode, to, subject);
+        if (!enabled) {
+            log.info("MAIL skipped (mail.enabled=false) to={} subject={}", to, subject);
+            return;
+        }
+
+        JavaMailSender sender = mailSender.getIfAvailable();
+        if (sender == null) {
+            throw new IllegalStateException(
+                    "mail.enabled=true but spring.mail.* is missing — use application-local.properties"
+            );
+        }
+        if (from.isBlank()) {
+            throw new IllegalStateException("mail.enabled=true requires mail.from");
+        }
+
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(from);
+        message.setTo(to);
+        message.setSubject(subject);
+        message.setText(body);
+        sender.send(message);
+        log.info("MAIL sent to={} subject={}", to, subject);
     }
 
+    /** When true, APIs must not return raw tokens — the user receives them by email. */
     public boolean isEnabled() {
         return enabled;
     }

@@ -4,8 +4,7 @@ import com.finflow.identity.repository.EmailVerificationTokenRepository;
 import com.finflow.identity.repository.OrgInviteTokenRepository;
 import com.finflow.identity.repository.PasswordResetTokenRepository;
 import com.finflow.identity.repository.RefreshTokenRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,10 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 
 /** Ops hygiene: purge expired / used tokens on a schedule. */
+@Slf4j
 @Component
 public class TokenCleanupJob {
-
-    private static final Logger log = LoggerFactory.getLogger(TokenCleanupJob.class);
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;

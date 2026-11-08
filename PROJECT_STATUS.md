@@ -2,7 +2,25 @@
 
 Last assessed: **2026-11-08 (Asia/Calcutta)**.
 
-## Latest progress checkpoint - 2026-11-08 (identity Postman resend)
+## Latest progress checkpoint - 2026-11-08 (identity narrow Lombok)
+
+- **Last active/affected service:** identity-service. Lombok kept to `@Getter` (entities/`ApiException`) + `@Slf4j` only. **Removed** `@RequiredArgsConstructor` — explicit constructors restored so injected deps stay readable. No `@Data`. AGENTS.md/DECISIONS updated.
+- **Verification:** Earlier clean compile succeeded; after constructor restore, recompile not claimed here unless run. Tests not run.
+- **Next:** Confirm focused tests if desired.
+
+## Previous checkpoint - 2026-11-08 (identity mail cleanup)
+
+- **Last active/affected service:** identity-service. Simplified SMTP to one path: `application-local.properties` (+ example). Removed `mail` profile, `mail-secrets.env*`, `scripts/run-with-mail.ps1`. MailService/MailDeliveryGuard messages trimmed. User already verified Register → Ethereal → Verify 204 → ready for Login.
+- **Verification:** Cleanup only; tests not run.
+- **Next:** Keep using normal identity start; optional Gmail App Password later for real inbox.
+
+## Previous checkpoint - 2026-11-08 (identity real SMTP)
+
+- **Last active/affected service:** identity-service. Real mail via profile `mail` (`application-mail.properties`), `MailDeliveryGuard` fail-fast, clearer email bodies, `mail-secrets.env.example` + `scripts/run-with-mail.ps1` (secrets gitignored). Default profile still Postman tokens without SMTP.
+- **Verification:** Java 21 `mvn -B -o '-Dmaven.test.skip=true' compile` after mail profile work. Tests not run — suggest `MailServiceTest,AuthServiceTest` after confirm.
+- **Next:** User copies `mail-secrets.env`, fills Gmail app password, runs `.\scripts\run-with-mail.ps1`, Registers real email in Postman, verifies from inbox.
+
+## Previous checkpoint - 2026-11-08 (identity Postman resend)
 
 - **Last active/affected service:** identity-service (Postman only). Added **Auth → 1b. Resend verification** (`POST /api/v1/auth/resend-verification`); test script saves `verificationToken`. Regenerated via `python postman/_gen_collections.py --identity-only`.
 - **Next:** Re-import identity collection in Postman; for unverified existing users run 1b → Verify Email → Login.

@@ -181,7 +181,16 @@ public class OrgService {
         mailService.send(
                 normalizedEmail,
                 "FinFlow org invite",
-                "Invite token: " + rawInviteToken
+                """
+                You were invited to a FinFlow organisation.
+
+                Sign in as this email, then paste the invite token into
+                Organisations → Accept Invite (or the invites/accept API):
+
+                %s
+
+                If you were not expecting this, ignore this message.
+                """.formatted(rawInviteToken).stripIndent().trim()
         );
 
         auditService.record(
