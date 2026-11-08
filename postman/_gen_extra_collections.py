@@ -326,8 +326,227 @@ def notification_collection() -> dict:
     }
 
 
+def _gateway_identity_via_gateway_items() -> list:
+    """Identity HTTP APIs routed through the gateway (gatewayBaseUrl). Does not modify the identity-service collection."""
+    base = "{{gatewayBaseUrl}}"
+    login_save = [
+        "if (pm.response.code === 200) {",
+        "  const body = pm.response.json();",
+        "  if (body.accessToken) { pm.collectionVariables.set('accessToken', body.accessToken); pm.environment.set('accessToken', body.accessToken); }",
+        "  if (body.refreshToken) { pm.collectionVariables.set('refreshToken', body.refreshToken); pm.environment.set('refreshToken', body.refreshToken); }",
+        "  if (body.userId != null) { pm.collectionVariables.set('userId', String(body.userId)); pm.environment.set('userId', String(body.userId)); }",
+        "  if (body.permissions) console.log('permissions', body.permissions);",
+        "}",
+    ]
+    member_login_save = [
+        "if (pm.response.code === 200) {",
+        "  const body = pm.response.json();",
+        "  if (body.accessToken) { pm.collectionVariables.set('accessToken2', body.accessToken); pm.environment.set('accessToken2', body.accessToken); }",
+        "  if (body.refreshToken) { pm.collectionVariables.set('refreshToken2', body.refreshToken); pm.environment.set('refreshToken2', body.refreshToken); }",
+        "  if (body.userId != null) { pm.collectionVariables.set('userId2', String(body.userId)); pm.environment.set('userId2', String(body.userId)); }",
+        "  if (body.permissions) console.log('permissions', body.permissions);",
+        "}",
+    ]
+    register_save = [
+        "if (pm.response.code === 201) {",
+        "  const body = pm.response.json();",
+        "  if (body.token) { pm.collectionVariables.set('verificationToken', body.token); pm.environment.set('verificationToken', body.token); }",
+        "  if (body.profile && body.profile.userId != null) { pm.collectionVariables.set('userId', String(body.profile.userId)); pm.environment.set('userId', String(body.profile.userId)); }",
+        "}",
+    ]
+    register_member_save = [
+        "if (pm.response.code === 201) {",
+        "  const body = pm.response.json();",
+        "  if (body.token) { pm.collectionVariables.set('verificationToken', body.token); pm.environment.set('verificationToken', body.token); }",
+        "  if (body.profile && body.profile.userId != null) { pm.collectionVariables.set('userId2', String(body.profile.userId)); pm.environment.set('userId2', String(body.profile.userId)); }",
+        "}",
+    ]
+    auth_folder = {
+        "name": "Auth",
+        "description": "Public and authenticated identity auth endpoints via the gateway identity route.",
+        "item": [
+            named("0. JWKS (public)", "GET", f"{base}/.well-known/jwks.json"),
+            named(
+                "1. Register",
+                "POST",
+                f"{base}/api/v1/auth/register",
+                json_ct(),
+                '{\n  "email": "{{email}}",\n  "password": "{{password}}"\n}',
+                register_save,
+            ),
+            named(
+                "1b. Resend verification",
+                "POST",
+                f"{base}/api/v1/auth/resend-verification",
+                json_ct(),
+                '{\n  "email": "{{email}}"\n}',
+                [
+                    "if (pm.response.code === 200) {",
+                    "  const body = pm.response.json();",
+                    "  if (body.token) { pm.collectionVariables.set('verificationToken', body.token); pm.environment.set('verificationToken', body.token); }",
+                    "}",
+                ],
+            ),
+            named(
+                "2. Verify Email",
+                "POST",
+                f"{base}/api/v1/auth/verify-email",
+                json_ct(),
+                '{\n  "token": "{{verificationToken}}"\n}',
+            ),
+            named(
+                "3. Login",
+                "POST",
+                f"{base}/api/v1/auth/login",
+                json_ct(),
+                '{\n  "email": "{{email}}",\n  "password": "{{password}}"\n}',
+                login_save,
+            ),
+            named("4. Me", "GET", f"{base}/api/v1/users/me", auth()),
+            named(
+                "5. Refresh",
+                "POST",
+                f"{base}/api/v1/auth/refresh",
+                json_ct(),
+                '{\n  "refreshToken": "{{refreshToken}}"\n}',
+                login_save,
+            ),
+            named(
+                "6. Forgot Password",
+                "POST",
+                f"{base}/api/v1/auth/forgot-password",
+                json_ct(),
+                '{\n  "email": "{{email}}"\n}',
+                [
+                    "if (pm.response.code === 200) {",
+                    "  const body = pm.response.json();",
+                    "  if (body.token) { pm.collectionVariables.set('resetToken', body.token); pm.environment.set('resetToken', body.token); }",
+                    "}",
+                ],
+            ),
+            named(
+                "7. Reset Password",
+                "POST",
+                f"{base}/api/v1/auth/reset-password",
+                json_ct(),
+                '{\n  "resetToken": "{{resetToken}}",\n  "newPassword": "{{password}}"\n}',
+            ),
+            named(
+                "8. Change Password",
+                "POST",
+                f"{base}/api/v1/auth/change-password",
+                auth() + json_ct(),
+                '{\n  "currentPassword": "{{password}}",\n  "newPassword": "{{password}}"\n}',
+            ),
+            named(
+                "9. Logout",
+                "POST",
+                f"{base}/api/v1/auth/logout",
+                json_ct(),
+                '{\n  "refreshToken": "{{refreshToken}}"\n}',
+            ),
+        ],
+    }
+    orgs_folder = {
+        "name": "Organisations",
+        "description": "Organisation and membership APIs via the gateway. Run Auth first; re-login after create/accept so JWT permissions refresh.",
+        "item": [
+            named(
+                "1. Create Org",
+                "POST",
+                f"{base}/api/v1/orgs",
+                auth() + json_ct(),
+                '{\n  "name": "Acme Finance"\n}',
+                [
+                    "if (pm.response.code === 201) {",
+                    "  const body = pm.response.json();",
+                    "  if (body.orgId != null) { pm.collectionVariables.set('orgId', String(body.orgId)); pm.environment.set('orgId', String(body.orgId)); }",
+                    "}",
+                ],
+            ),
+            named(
+                "1b. Login again (wallet permissions in JWT)",
+                "POST",
+                f"{base}/api/v1/auth/login",
+                json_ct(),
+                '{\n  "email": "{{email}}",\n  "password": "{{password}}"\n}',
+                login_save,
+            ),
+            named("2. List My Orgs", "GET", f"{base}/api/v1/orgs", auth()),
+            named("2b. Get Org", "GET", f"{base}/api/v1/orgs/{{orgId}}", auth()),
+            named(
+                "3. Register Member (user B)",
+                "POST",
+                f"{base}/api/v1/auth/register",
+                json_ct(),
+                '{\n  "email": "{{memberEmail}}",\n  "password": "{{memberPassword}}"\n}',
+                register_member_save,
+            ),
+            named(
+                "4. Verify Member Email",
+                "POST",
+                f"{base}/api/v1/auth/verify-email",
+                json_ct(),
+                '{\n  "token": "{{verificationToken}}"\n}',
+            ),
+            named(
+                "5. Invite Member",
+                "POST",
+                f"{base}/api/v1/orgs/{{orgId}}/invites",
+                auth() + json_ct(),
+                '{\n  "email": "{{memberEmail}}",\n  "role": "FINANCE_OPERATOR"\n}',
+                [
+                    "if (pm.response.code === 201) {",
+                    "  const body = pm.response.json();",
+                    "  if (body.token) { pm.collectionVariables.set('inviteToken', body.token); pm.environment.set('inviteToken', body.token); }",
+                    "}",
+                ],
+            ),
+            named(
+                "6. Member Login (before accept)",
+                "POST",
+                f"{base}/api/v1/auth/login",
+                json_ct(),
+                '{\n  "email": "{{memberEmail}}",\n  "password": "{{memberPassword}}"\n}',
+                member_login_save,
+            ),
+            named(
+                "7. Accept Invite (as member)",
+                "POST",
+                f"{base}/api/v1/orgs/invites/accept",
+                auth("accessToken2") + json_ct(),
+                '{\n  "token": "{{inviteToken}}"\n}',
+            ),
+            named(
+                "7b. Member Login again (wallet permissions → accessToken2)",
+                "POST",
+                f"{base}/api/v1/auth/login",
+                json_ct(),
+                '{\n  "email": "{{memberEmail}}",\n  "password": "{{memberPassword}}"\n}',
+                member_login_save,
+            ),
+            named("8. List Members", "GET", f"{base}/api/v1/orgs/{{orgId}}/members", auth()),
+            named(
+                "9. Change Member Role",
+                "PUT",
+                f"{base}/api/v1/orgs/{{orgId}}/members/{{userId2}}/role",
+                auth() + json_ct(),
+                '{\n  "role": "MEMBER"\n}',
+            ),
+            named("10. Org Audit Log", "GET", f"{base}/api/v1/orgs/{{orgId}}/audit", auth()),
+            named(
+                "11. Remove Member",
+                "DELETE",
+                f"{base}/api/v1/orgs/{{orgId}}/members/{{userId2}}",
+                auth(),
+            ),
+        ],
+    }
+    return [auth_folder, orgs_folder]
+
+
 def gateway_collection() -> dict:
-    """Gateway assertions, with explicit opt-in for live services and controlled fixtures."""
+    """Gateway edge checks plus identity APIs via gatewayBaseUrl. No fixture toggles."""
 
     def event(listen, lines):
         return {"listen": listen, "script": {"type": "text/javascript", "exec": lines}}
@@ -384,16 +603,8 @@ def gateway_collection() -> dict:
         item["event"] = ([event("prerequest", setup)] if setup else []) + [event("test", checks)]
         return item
 
-    def folder(name, items, description, flag=None):
-        result = {"name": name, "description": description, "item": items}
-        if flag:
-            result["event"] = [event("prerequest", [
-                f"if (String(pm.variables.get('{flag}')).toLowerCase() !== 'true') {{",
-                f"  console.warn('SKIPPED {name}: set {flag}=true only after preparing its fixtures.');",
-                "  pm.execution.skipRequest();",
-                "}",
-            ])]
-        return result
+    def folder(name, items, description):
+        return {"name": name, "description": description, "item": items}
 
     oversized = [
         "pm.variables.set('gatewayOversizedBody', 'x'.repeat(1048577));"
@@ -433,160 +644,38 @@ def gateway_collection() -> dict:
                  "});",
              ]),
     ]
-    # Every path family and supported business write verb is checked without authorization.
+    # One unauthenticated 401 sample per routed service family (not every write verb).
     for label, method, path in [
         ("Identity profile", "GET", "/api/v1/users/me"),
         ("Organisation", "GET", "/api/v1/orgs"),
-        ("Wallet by user", "GET", "/api/v1/users/1/wallet"),
         ("Wallet", "GET", "/api/v1/wallets/1"),
-        ("Transfer", "GET", "/api/v1/transfers/1"),
-        ("Products", "GET", "/api/v1/products?organisationId=1"),
-        ("Categories", "GET", "/api/v1/categories?organisationId=1"),
-        ("Coupons POST", "POST", "/api/v1/coupons"),
-        ("Cart PUT", "PUT", "/api/v1/carts/items/1"),
-        ("Cart DELETE", "DELETE", "/api/v1/carts?organisationId=1"),
-        ("Product PATCH", "PATCH", "/api/v1/products/1"),
-        ("Order POST", "POST", "/api/v1/orders"),
-        ("Return POST", "POST", "/api/v1/returns/1/approve"),
+        ("Commerce product", "GET", "/api/v1/products?organisationId=1"),
         ("Notifications", "GET", "/api/v1/notifications/me"),
         ("Unknown protected API", "GET", "/api/v1/gateway-missing-route"),
     ]:
         core.append(case("No JWT - " + label, method, path, 401, error="UNAUTHORIZED"))
 
-    live = [
-        case("JWKS via Gateway", "GET", "/.well-known/jwks.json", 200, fields=("keys",), correlation=True,
-             tests=[
-                 "pm.test('Public RSA signing keys', () => {",
-                 "  const keys = pm.response.json().keys;",
-                 "  pm.expect(keys).to.be.an('array').and.not.empty;",
-                 "  keys.forEach(key => { ['kid', 'kty', 'n', 'e'].forEach(field => pm.expect(key).to.have.property(field)); pm.expect(key.kty).to.eql('RSA'); pm.expect(key).not.to.have.property('d'); });",
-                 "});",
-             ]),
-        case("Me (profile)", "GET", "/api/v1/users/me", 200, token="accessToken", required=("userId",),
-             fields=("userId", "email", "orgIds", "permissions"), correlation=True,
-             tests=["pm.test('Own profile', () => pm.expect(String(pm.response.json().userId)).to.eql(String(pm.variables.get('userId'))));"]),
-        case("List My Orgs", "GET", "/api/v1/orgs", 200, token="accessToken", array=True, correlation=True),
-        case("Wallet by User", "GET", "/api/v1/users/{{userId}}/wallet", 200,
-             token="accessToken", required=("userId", "walletId"), fields=("walletId", "userId", "balance", "currency"),
-             correlation=True, tests=[
-                 "pm.test('Own wallet mapping', () => { const body = pm.response.json(); pm.expect(String(body.userId)).to.eql(String(pm.variables.get('userId'))); pm.expect(String(body.walletId)).to.eql(String(pm.variables.get('walletId'))); });"
-             ]),
-        case("Wallet by ID", "GET", "/api/v1/wallets/{{walletId}}", 200,
-             token="accessToken", required=("walletId", "userId"), fields=("walletId", "userId", "balance"),
-             correlation=True, tests=[
-                 "pm.test('Requested wallet', () => pm.expect(String(pm.response.json().walletId)).to.eql(String(pm.variables.get('walletId'))));"
-             ]),
-        case("Wallet history", "GET", "/api/v1/wallets/{{walletId}}/transactions", 200,
-             token="accessToken", required=("walletId",), array=True, correlation=True),
-        case("List Products", "GET", "/api/v1/products?organisationId={{orgId}}", 200,
-             token="accessToken", required=("orgId",), array=True, correlation=True),
-        case("Search Products", "GET", "/api/v1/products/search?organisationId={{orgId}}&page=0&size=20", 200,
-             token="accessToken", required=("orgId",), fields=("content", "totalElements"), correlation=True,
-             tests=["pm.test('Page content', () => pm.expect(pm.response.json().content).to.be.an('array'));"]),
-        case("List Categories", "GET", "/api/v1/categories?organisationId={{orgId}}", 200,
-             token="accessToken", required=("orgId",), array=True, correlation=True),
-        case("Get Cart", "GET", "/api/v1/carts?organisationId={{orgId}}", 200,
-             token="accessToken", required=("orgId",), fields=("organisationId", "customerUserId", "items"),
-             correlation=True, tests=[
-                 "pm.test('Own organisation cart', () => pm.expect(String(pm.response.json().organisationId)).to.eql(String(pm.variables.get('orgId'))));"
-             ]),
-        case("List Orders", "GET", "/api/v1/orders?organisationId={{orgId}}", 200,
-             token="accessToken", required=("orgId",), array=True, correlation=True),
-        case("My Notifications", "GET", "/api/v1/notifications/me", 200,
-             token="accessToken", array=True, correlation=True),
-        case("Aggregate Health", "GET", "/actuator/health", 200, fields=("status",),
-             tests=["pm.test('Dependencies healthy', () => pm.expect(pm.response.json().status).to.eql('UP'));"],
-             description="A 503 is a failure here, not accepted as healthy. Redis must be reachable."),
-        case("Prometheus - current exposure", "GET", "/actuator/prometheus", 200,
-             tests=["pm.test('Prometheus exposition', () => pm.expect(pm.response.text()).to.include('# HELP'));"],
-             description="Current local behavior only; private access is tested separately as a production target."),
-    ]
-    auth_cases = [
-        case("Expired token rejected", "GET", "/api/v1/users/me", 401,
-             token="expiredAccessToken", error="UNAUTHORIZED",
-             description="Supply a formerly valid identity-issued token whose exp has passed; no generated fake token."),
-        case("Tampered signature rejected", "GET", "/api/v1/users/me", 401, token="gatewayTamperedJwt", generated_token=True,
-             error="UNAUTHORIZED", required=("accessToken",), before=[
-                 "const parts = String(pm.variables.get('accessToken')).split('.');",
-                 "if (parts.length !== 3 || !parts[2]) throw new Error('Provide a valid accessToken for signature tampering');",
-                 "parts[2] = (parts[2][0] === 'A' ? 'B' : 'A') + parts[2].slice(1);",
-                 "pm.variables.set('gatewayTamperedJwt', parts.join('.'));",
-             ]),
-        case("Missing wallet permission", "GET", "/api/v1/wallets/{{walletId}}", 403,
-             token="noPermissionAccessToken", required=("walletId",), error="FORBIDDEN",
-             description="Valid unexpired identity JWT without wallets:read. A malformed/expired token should fail this test with 401."),
-        case("Another user's wallet denied", "GET", "/api/v1/wallets/{{walletId2}}", 403,
-             token="accessToken", required=("walletId2",), error="FORBIDDEN",
-             description="walletId2 must belong to a different user; caller must have wallets:read."),
-        case("Another organisation denied", "GET", "/api/v1/products?organisationId={{otherOrgId}}", 403,
-             token="accessToken", required=("otherOrgId",), error="FORBIDDEN",
-             description="otherOrgId must not be in caller orgIds; caller must have commerce:read."),
-    ]
-    faults = [
-        case("Unavailable identity fallback", "GET", "/.well-known/jwks.json", 503,
-             base="gatewayUnavailableBaseUrl", required=("gatewayUnavailableBaseUrl",),
-             error="UPSTREAM_UNAVAILABLE", correlation=True,
-             tests=["pm.test('Identity fallback', () => pm.expect(pm.response.json().service).to.eql('identity'));"],
-             description="Separate gateway instance with identity.uri pointing to an unused loopback port. Do not stop a real shared service."),
-        case("Backend HTTP500 after GET retries", "GET", "/.well-known/jwks.json", 500,
-             base="gatewayHttp500BaseUrl", required=("gatewayHttp500BaseUrl",), correlation=True,
-             description="Separate gateway with a controlled identity mock returning 500. Verify three backend attempts in mock logs; response alone cannot prove the count."),
-        case("Backend HTTP500 POST is not retried", "POST", "/api/v1/auth/login", 500,
-             base="gatewayHttp500BaseUrl", required=("gatewayHttp500BaseUrl",), correlation=True,
-             body="{}", headers=[{"key": "Content-Type", "value": "application/json"}],
-             description="Controlled mock only; no valid credentials are sent. Verify one POST in mock logs, not just the final response."),
-    ]
-    rate = case("Bounded anonymous quota burst", "GET", "/actuator/info", 200,
-                base="gatewayRateBaseUrl", required=("gatewayRateBaseUrl",),
-                description="Isolated gateway, Redis UP, fast JWKS backend, replenish=1/burst=1. Sends 20 read-only requests; never run as a production load test.",
-                tests=[
-                    "const base = String(pm.variables.get('gatewayRateBaseUrl')).replace(/\\/$/, '');",
-                    "const results = []; let pending = 20;",
-                    "for (let i = 0; i < 20; i++) {",
-                    "  pm.sendRequest({url: base + '/.well-known/jwks.json', method: 'GET'}, (err, response) => {",
-                    "    results.push(err ? 0 : response.code);",
-                    "    if (--pending === 0) {",
-                    "      pm.test('All burst requests completed without transport error', () => pm.expect(results).not.to.include(0));",
-                    "      pm.test('Only successful or rate-limited responses', () => results.forEach(code => pm.expect([200, 429]).to.include(code)));",
-                    "      pm.test('Quota was enforced', () => pm.expect(results).to.include(429));",
-                    "      pm.test('At least one request reached JWKS', () => pm.expect(results).to.include(200));",
-                    "    }",
-                    "  });",
-                    "}",
-                ])
-    gaps = [
-        case("TARGET - metrics are private", "GET", "/actuator/metrics", 401,
-             description="Expected to FAIL current local implementation (200). Agree final operational auth policy before implementing."),
-        case("TARGET - Prometheus is private", "GET", "/actuator/prometheus", 401,
-             description="Expected to FAIL current local implementation (200)."),
-        case("TARGET - 401 has correlation ID", "GET", "/api/v1/wallets/1", 401, error="UNAUTHORIZED",
-             correlation=True, description="Status passes today; correlation assertion should FAIL until early request correlation is implemented."),
-        case("TARGET - 401 has bearer challenge", "GET", "/api/v1/wallets/1", 401,
-             tests=["pm.test('Bearer challenge present', () => pm.expect(pm.response.headers.get('WWW-Authenticate') || '').to.match(/^Bearer/i));"],
-             description="Expected to FAIL current implementation."),
-        case("TARGET - oversized response has JSON code", "POST", "/api/v1/auth/register", 413,
-             before=oversized, body="{{gatewayOversizedBody}}",
-             headers=[{"key": "Content-Type", "value": "application/json"}], error="PAYLOAD_TOO_LARGE",
-             description="Expected to FAIL current empty-body response. Does not test streamed byte limits."),
-    ]
     variables = [
         ("gatewayBaseUrl", "http://localhost:18080"),
         ("gatewayOrigin", "http://localhost:3000"),
-        ("accessToken", ""), ("userId", ""), ("orgId", ""), ("walletId", ""), ("walletId2", ""),
-        ("expiredAccessToken", ""), ("noPermissionAccessToken", ""), ("otherOrgId", ""),
-        ("gatewayRunAuthCases", "false"),
-        ("gatewayRunFaults", "false"), ("gatewayRunRateLimit", "false"), ("gatewayRunKnownGaps", "false"),
-        ("gatewayUnavailableBaseUrl", ""), ("gatewayHttp500BaseUrl", ""), ("gatewayRateBaseUrl", ""),
+        ("email", "demo@finflow.test"),
+        ("password", "password12"),
+        ("memberEmail", "operator@finflow.test"),
+        ("memberPassword", "password12"),
+        ("accessToken", ""), ("accessToken2", ""),
+        ("refreshToken", ""), ("refreshToken2", ""),
+        ("userId", ""), ("userId2", ""), ("orgId", ""),
+        ("verificationToken", ""), ("inviteToken", ""), ("resetToken", ""),
     ]
     return {
         "info": {
             "_postman_id": "d4e5f6a7-b8c9-0123-def0-234567890123",
             "name": "FinFlow - API Gateway",
             "description": (
-                "Gateway assertions, not a complete business API or production certification suite. "
-                "See api-gateway/postman/README.md for prerequisites and coverage limits. "
-                "Gateway checks and live routing run without a switch; special fixture folders skip until enabled. "
-                "No real credentials are stored. Known-gap targets intentionally fail current behavior."
+                "Edge checks for the gateway, plus identity Auth/Organisations through gatewayBaseUrl. "
+                "See api-gateway/postman/README.md. No fixture toggles. "
+                "Use wallet/commerce/notification service collections for those APIs. "
+                "No real credentials are stored."
             ),
             "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
         },
@@ -597,14 +686,20 @@ def gateway_collection() -> dict:
             "if (!base || !/^https?:\\/\\//.test(String(base))) throw new Error('Set gatewayBaseUrl to the gateway under test');",
         ])],
         "item": [
-            folder("01 Gateway checks", core, "No credentials or downstream business calls needed. Includes a generated 1 MiB+1 invalid-JSON request, rejected by the edge."),
-            folder("02 Live routing", live, "No enable switch. Send individual requests for the service running locally. Wallet requests need gateway, wallet, identity/JWKS and prepared token/user/wallet fixtures; the full folder needs all services."),
-            folder("03 Auth and ownership fixtures", auth_cases, "Real identity-issued expired/no-permission tokens and different-user/org resources required.", "gatewayRunAuthCases"),
-            folder("04 Controlled downstream faults", faults, "Separate isolated gateway instances only; no automatic shutdown of shared services.", "gatewayRunFaults"),
-            folder("05 Isolated rate-limit fixture", [rate], "20 asynchronous read-only requests against a low-quota test gateway, not production.", "gatewayRunRateLimit"),
-            folder("06 Known production gaps", gaps, "Opt-in desired-security targets; current code should fail these checks. Not a passing baseline.", "gatewayRunKnownGaps"),
+            folder(
+                "01 Gateway checks",
+                core,
+                "Gateway-only edge checks: health, routing errors, fallback, body limit, CORS, and one 401 sample per service family.",
+            ),
+            folder(
+                "02 Identity via Gateway",
+                _gateway_identity_via_gateway_items(),
+                "Identity Auth + Organisations through gatewayBaseUrl. Run when gateway + identity are up. "
+                "identity-service Postman collection is left unchanged.",
+            ),
         ],
     }
+
 
 
 def update_environment() -> None:

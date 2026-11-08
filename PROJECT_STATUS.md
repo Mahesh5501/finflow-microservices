@@ -1,8 +1,15 @@
 # FinFlow project status
 
-Last assessed: **2026-11-07 (Asia/Calcutta)**.
+Last assessed: **2026-11-08 (Asia/Calcutta)**.
 
-## Latest progress checkpoint - 2026-11-07 (api-gateway Lombok)
+## Latest progress checkpoint - 2026-11-08 (gateway Postman slimmed)
+
+- **Last active/affected service:** api-gateway (Postman only). Collection reduced to **two folders**: `01 Gateway checks` (edge + one 401 sample per service family) and `02 Identity via Gateway` (Auth + Organisations on `gatewayBaseUrl`). Removed live-routing duplicates, toggle folders 03–06, known-gap TARGET cases, and related variables. **identity-service Postman collection not modified.**
+- **Important files:** `postman/_gen_extra_collections.py`; regenerated gateway collection; rewritten `api-gateway/postman/README.md`.
+- **Verification:** Generator `--gateway-only` → 40 leaf requests, 2 folders, no `gatewayRun*` vars. Live Newman not run.
+- **Next:** Run folder 01 with gateway only, folder 02 with gateway + identity; or Lombok Maven tests if desired.
+
+## Previous checkpoint - 2026-11-07 (api-gateway Lombok)
 
 - **Last active/affected service:** api-gateway. Added optional Lombok and applied it only where applicable: `GatewayProperties` getters/setters, `SecurityConfig`/`GlobalErrorConfig` constructors, `AccessLogFilter`/`GlobalErrorConfig` loggers. Left bean-only configs and `CorrelationIdFilter`/`FallbackController` unchanged. No `@Data`. Routes, Redis rate limiting, security rules and YAML unchanged.
 - **Important files:** `api-gateway/pom.xml`; `GatewayProperties`, `SecurityConfig`, `GlobalErrorConfig`, `AccessLogFilter`; AGENTS.md convention note; docs/DECISIONS.md dated entry.

@@ -330,6 +330,6 @@ GET http://localhost:18080/api/v1/wallets/7
 Authorization: Bearer <access-token>
 ```
 
-Use [Postman instructions](postman/README.md) for the 52-case gateway collection, fixture flags, actual execution results and coverage limits. Folder 01 has 24 gateway-only checks. Folder 02 sends live requests without an enable switch; select individual wallet requests when only wallet is running. Authorization/fault/rate-limit fixtures remain opt-in. Known production-gap checks deliberately expose existing failures. Do not paste real tokens into documentation or commit them.
+Use [Postman instructions](postman/README.md) for the slim gateway collection: **01 Gateway checks** (edge only) and **02 Identity via Gateway** (Auth + Organisations on `gatewayBaseUrl`). No fixture toggles. Wallet/commerce/notification stay in their service collections; the identity-service collection is untouched. Do not paste real tokens into documentation or commit them.
 
 For a later session, you can simply say: "Explain the wallet request flow", "Show me how the rate limiter works" or "Let's implement the first gateway production-readiness task."
