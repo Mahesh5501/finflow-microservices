@@ -1,4 +1,3 @@
-
 package com.finflow.identity.security.ratelimit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -7,6 +6,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -31,35 +31,37 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final RateLimitService rateLimitService;
     private final ObjectMapper objectMapper;
 
-    public RateLimitFilter(
-            RateLimitService rateLimitService,
-            ObjectMapper objectMapper
-    ) {
+    public RateLimitFilter(RateLimitService rateLimitService, ObjectMapper objectMapper) {
         this.rateLimitService = rateLimitService;
         this.objectMapper = objectMapper;
     }
 
     @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain
-    ) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         String path = request.getRequestURI();
         if ("POST".equalsIgnoreCase(request.getMethod()) && LIMITED.contains(path)) {
-            String key = path + "|" + clientKey(request);
-            if (!rateLimitService.tryConsume(key)) {
-                ApiException ex = ApiException.tooManyRequests("Too many attempts — try again later");
-                response.setStatus(ex.getStatus().value());
-                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                objectMapper.writeValue(response.getOutputStream(), Map.of(
-                        "code", ex.getCode(),
-                        "message", ex.getMessage()
-                ));
+            try {
+                String key = path + "|" + clientKey(request);
+                if (!rateLimitService.tryConsume(key)) {
+                    writeApiError(response, ApiException.tooManyRequests("Too many attempts — try again later"));
+                    return;
+                }
+            } catch (DataAccessException ex) {
+                // Fail closed (no unlimited login), but do not pretend this is a missing Bearer token.
+                writeApiError(response, ApiException.serviceUnavailable("RATE_LIMIT_UNAVAILABLE", "Login rate limiting is unavailable — ensure Redis is running"));
                 return;
             }
         }
         filterChain.doFilter(request, response);
+    }
+
+    private void writeApiError(HttpServletResponse response, ApiException ex) throws IOException {
+        response.setStatus(ex.getStatus().value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        objectMapper.writeValue(response.getOutputStream(), Map.of(
+                "code", ex.getCode(),
+                "message", ex.getMessage()
+        ));
     }
 
     /**

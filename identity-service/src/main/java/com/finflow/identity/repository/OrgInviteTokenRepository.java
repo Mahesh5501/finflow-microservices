@@ -31,9 +31,7 @@ public interface OrgInviteTokenRepository extends JpaRepository<OrgInviteToken, 
     int consumeIfUsable(@Param("tokenHash") String tokenHash, @Param("now") Instant now);
 
     /**
-     * Invalidates all previous outstanding invitations for this
-     * organisation and email before a replacement invitation is issued.
-     *
+     * Invalidates all previous outstanding invitations for this organisation and email before a replacement invitation is issued.
      * @return number of invitations invalidated.
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)

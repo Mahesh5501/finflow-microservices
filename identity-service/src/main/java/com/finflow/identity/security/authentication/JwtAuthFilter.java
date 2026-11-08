@@ -26,11 +26,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain
-    ) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (header != null && header.startsWith("Bearer ")) {
             try {
@@ -58,20 +54,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 }
 
                 List<String> permissions = jwtService.permissions(claims);
-
-                AuthenticatedUser caller = new AuthenticatedUser(
-                        userId,
-                        email,
-                        permissions
-                );
-
+                AuthenticatedUser caller = new AuthenticatedUser(userId, email, permissions);
                 var authentication = new UsernamePasswordAuthenticationToken(
                         caller,
                         null,
-                        AuthorityUtils.createAuthorityList(
-                                permissions.toArray(String[]::new)
-                        )
-                );
+                        AuthorityUtils.createAuthorityList(permissions.toArray(String[]::new)));
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
 

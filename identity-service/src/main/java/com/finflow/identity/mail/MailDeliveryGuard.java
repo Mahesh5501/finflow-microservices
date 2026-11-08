@@ -17,10 +17,7 @@ class MailDeliveryGuard {
     private final String from;
     private final ObjectProvider<JavaMailSender> mailSender;
 
-    MailDeliveryGuard(
-            @Value("${mail.from:}") String from,
-            ObjectProvider<JavaMailSender> mailSender
-    ) {
+    MailDeliveryGuard(@Value("${mail.from:}") String from, ObjectProvider<JavaMailSender> mailSender) {
         this.from = from == null ? "" : from.trim();
         this.mailSender = mailSender;
     }
@@ -28,15 +25,10 @@ class MailDeliveryGuard {
     @PostConstruct
     void requireSmtp() {
         if (from.isBlank()) {
-            throw new IllegalStateException(
-                    "mail.enabled=true needs mail.from (set it in application-local.properties)"
-            );
+            throw new IllegalStateException("mail.enabled=true needs mail.from (set it in application-local.properties)");
         }
         if (mailSender.getIfAvailable() == null) {
-            throw new IllegalStateException(
-                    "mail.enabled=true needs spring.mail.host/username/password "
-                            + "(copy application-local.properties.example)"
-            );
+            throw new IllegalStateException("mail.enabled=true needs spring.mail.host/username/password (copy application-local.properties.example)");
         }
     }
 }

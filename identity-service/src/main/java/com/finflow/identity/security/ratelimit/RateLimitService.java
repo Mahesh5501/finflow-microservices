@@ -57,16 +57,12 @@ public class RateLimitService {
     }
 
     /**
-     * @return true if the request is allowed; false if the limit is exceeded.
-     *
-     * Redis errors are allowed to propagate. Authentication rate limiting
-     * therefore fails closed rather than silently allowing unlimited attempts.
+     * @return true if the request is allowed; false if the limit is exceeded
+     * @throws org.springframework.dao.DataAccessException when Redis is unreachable (caller must fail closed with a clear 503 — never treat this as missing Bearer auth)
      */
     public boolean tryConsume(String key) {
         String redisKey = "identity:ratelimit:" + key;
-
         Long count = redis.execute(INCREMENT_AND_EXPIRE_SCRIPT, List.of(redisKey), String.valueOf(windowMs));
-
         return count != null && count <= maxAttempts;
     }
 }

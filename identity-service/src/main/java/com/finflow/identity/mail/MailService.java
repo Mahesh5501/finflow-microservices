@@ -31,7 +31,7 @@ public class MailService {
 
     public void send(String to, String subject, String body) {
         if (!enabled) {
-            log.info("MAIL skipped (mail.enabled=false) to={} subject={}", to, subject);
+            log.info("MAIL delivery=skipped (mail.enabled=false) to={} subject={}", to, subject);
             return;
         }
 

@@ -2,7 +2,19 @@
 
 Last assessed: **2026-11-08 (Asia/Calcutta)**.
 
-## Latest progress checkpoint - 2026-11-08 (identity narrow Lombok)
+## Latest progress checkpoint - 2026-11-08 (identity rate-limit Redis 503)
+
+- **Last active/affected service:** identity-service. When Redis is down, login/forgot/resend no longer return misleading Bearer `401`. `RateLimitFilter` catches `DataAccessException` → `503 RATE_LIMIT_UNAVAILABLE` (still fail-closed).
+- **Verification:** Source only; restart identity to pick up. Manual curl with Redis stopped suggested after confirm.
+- **Next:** Restart identity; optional `MailServiceTest` still pending confirmation from prior checkpoint.
+
+## Previous checkpoint - 2026-11-08 (MailService log vs test)
+
+- **Last active/affected service:** identity-service. `MailServiceTest.disabledModeSkipsSmtpAndDoesNotLogTokenBody` failed because skipped-mail log no longer contained `delivery=skipped`. Restored that marker in the disabled-path `log.info` (still no token body).
+- **Verification:** Source fix only. Tests not re-run. Propose: `mvn -B -Dtest=MailServiceTest test` in identity-service (await confirmation).
+- **Next:** Run that focused test after user confirmation.
+
+## Previous checkpoint - 2026-11-08 (identity narrow Lombok)
 
 - **Last active/affected service:** identity-service. Lombok kept to `@Getter` (entities/`ApiException`) + `@Slf4j` only. **Removed** `@RequiredArgsConstructor` — explicit constructors restored so injected deps stay readable. No `@Data`. AGENTS.md/DECISIONS updated.
 - **Verification:** Earlier clean compile succeeded; after constructor restore, recompile not claimed here unless run. Tests not run.

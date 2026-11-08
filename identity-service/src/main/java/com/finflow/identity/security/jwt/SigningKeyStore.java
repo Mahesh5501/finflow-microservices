@@ -37,8 +37,7 @@ final class SigningKeyStore {
             return read(absoluteFile);
         } catch (IOException | GeneralSecurityException | RuntimeException exception) {
             // Never recover from damaged/unreadable keys by rotating them implicitly.
-            throw new IllegalStateException("Cannot load identity signing key; check jwt.signing-key-path and file permissions",
-                    exception);
+            throw new IllegalStateException("Cannot load identity signing key; check jwt.signing-key-path and file permissions", exception);
         }
     }
 
@@ -66,29 +65,16 @@ final class SigningKeyStore {
 
             FileAttribute<?>[] permissions =
                     Files.getFileStore(directory).supportsFileAttributeView("posix")
-                            ? new FileAttribute<?>[]{
-                            PosixFilePermissions.asFileAttribute(
-                                    PosixFilePermissions.fromString("rw-------")
-                            )
-                    }
+                            ? new FileAttribute<?>[]{PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"))}
                             : new FileAttribute<?>[0];
 
-            Path temporaryFile = Files.createTempFile(
-                    directory,
-                    ".signing-key-",
-                    ".tmp",
-                    permissions
-            );
+            Path temporaryFile = Files.createTempFile(directory, ".signing-key-", ".tmp", permissions);
 
             try {
                 Files.write(temporaryFile, pair.getPrivate().getEncoded());
 
                 // Publish the complete key atomically.
-                Files.move(
-                        temporaryFile,
-                        keyFile,
-                        StandardCopyOption.ATOMIC_MOVE
-                );
+                Files.move(temporaryFile, keyFile, StandardCopyOption.ATOMIC_MOVE);
 
             } finally {
                 Files.deleteIfExists(temporaryFile);
@@ -122,13 +108,7 @@ final class SigningKeyStore {
         }
 
         // Derive the public key to prevent private/public key mismatches.
-        var publicKey = factory.generatePublic(
-                new RSAPublicKeySpec(
-                        privateKey.getModulus(),
-                        privateKey.getPublicExponent()
-                )
-        );
-
+        var publicKey = factory.generatePublic(new RSAPublicKeySpec(privateKey.getModulus(), privateKey.getPublicExponent()));
         return new KeyPair(publicKey, privateKey);
     }
 }

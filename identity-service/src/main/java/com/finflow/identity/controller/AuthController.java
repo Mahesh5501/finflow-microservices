@@ -88,10 +88,7 @@ public class AuthController {
 
     @PostMapping("/auth/change-password")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void changePassword(
-            Authentication authentication,
-            @Valid @RequestBody ChangePasswordRequest request
-    ) {
+    public void changePassword(Authentication authentication, @Valid @RequestBody ChangePasswordRequest request) {
         AuthenticatedUser caller = (AuthenticatedUser) authentication.getPrincipal();
         authService.changePassword(caller.userId(), request.currentPassword(), request.newPassword());
     }

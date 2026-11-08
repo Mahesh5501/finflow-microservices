@@ -45,14 +45,7 @@ public class AuditLog {
     protected AuditLog() {
     }
 
-    public AuditLog(
-            Long actorUserId,
-            Long orgId,
-            String action,
-            String resourceType,
-            String resourceId,
-            String details
-    ) {
+    public AuditLog(Long actorUserId, Long orgId, String action, String resourceType, String resourceId, String details) {
         this.actorUserId = actorUserId;
         this.orgId = orgId;
         this.action = action;

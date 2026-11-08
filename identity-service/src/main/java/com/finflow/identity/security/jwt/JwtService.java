@@ -30,8 +30,7 @@ public class JwtService {
     public JwtService(
             @Value("${jwt.access-expiration-ms}") long accessExpirationMs,
             @Value("${jwt.signing-key-path:.local/identity/signing-key.pk8}") String signingKeyPath,
-            @Value("${jwt.generate-key-if-missing:true}") boolean generateKeyIfMissing
-    ) {
+            @Value("${jwt.generate-key-if-missing:true}") boolean generateKeyIfMissing) {
         if (accessExpirationMs <= 0) {
             throw new IllegalArgumentException("jwt.access-expiration-ms must be greater than zero");
         }

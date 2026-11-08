@@ -19,14 +19,7 @@ public class AuditService {
     }
 
     @Transactional
-    public void record(
-            Long actorUserId,
-            Long orgId,
-            String action,
-            String resourceType,
-            String resourceId,
-            String details
-    ) {
+    public void record(Long actorUserId, Long orgId, String action, String resourceType, String resourceId, String details) {
         auditLogRepository.save(new AuditLog(actorUserId, orgId, action, resourceType, resourceId, details));
     }
 

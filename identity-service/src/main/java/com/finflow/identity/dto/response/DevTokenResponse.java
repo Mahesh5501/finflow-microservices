@@ -8,8 +8,5 @@ package com.finflow.identity.dto.response;
  * </ul>
  * Used by: forgot-password, resend-verification.
  */
-public record DevTokenResponse(
-        String message,
-        String token
-) {
+public record DevTokenResponse(String message, String token) {
 }

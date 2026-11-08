@@ -66,3 +66,7 @@ Identity sends plain-text mail via JavaMailSender when `mail.enabled=true`. Loca
 ## 2026-11-08: Identity narrow Lombok (user-approved)
 
 Identity uses Lombok only for `@Getter` (entities/`ApiException`) and `@Slf4j`. Explicit constructors kept for DI visibility — no `@RequiredArgsConstructor`. No `@Data`. DTOs remain records.
+
+## 2026-11-08: Identity rate-limit Redis down → 503
+
+Login/forgot/resend still fail closed when Redis is unreachable (no unlimited attempts). Response is `503 RATE_LIMIT_UNAVAILABLE`, not the security entry-point `401 Valid Bearer access token required`.

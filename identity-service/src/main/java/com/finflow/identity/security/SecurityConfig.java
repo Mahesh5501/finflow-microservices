@@ -38,8 +38,7 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf(csrf -> csrf.disable())
+        http.csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable())
@@ -55,20 +54,17 @@ public class SecurityConfig {
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/logout",
                                 "/api/v1/auth/forgot-password",
-                                "/api/v1/auth/reset-password"
-                        ).permitAll()
+                                "/api/v1/auth/reset-password").permitAll()
                         .anyRequest().authenticated()
                 )
                 // Filter-chain failures happen before controller advice can format a response.
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint((request, response, exception) -> {
                             response.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
-                            writeSecurityError(response, HttpServletResponse.SC_UNAUTHORIZED,
-                                    "UNAUTHORIZED", "Valid Bearer access token required");
+                            writeSecurityError(response, HttpServletResponse.SC_UNAUTHORIZED, "UNAUTHORIZED", "Valid Bearer access token required");
                         })
                         .accessDeniedHandler((request, response, exception) ->
-                                writeSecurityError(response, HttpServletResponse.SC_FORBIDDEN,
-                                        "FORBIDDEN", "Access denied"))
+                                writeSecurityError(response, HttpServletResponse.SC_FORBIDDEN, "FORBIDDEN", "Access denied"))
                 )
                 .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

@@ -61,20 +61,13 @@ public class OrgController {
     /** Puts membership in INVITED; invitee must accept with the token. */
     @PostMapping("/{orgId}/invites")
     @ResponseStatus(HttpStatus.CREATED)
-    public InviteMemberResponse inviteMember(
-            Authentication authentication,
-            @PathVariable Long orgId,
-            @Valid @RequestBody InviteMemberRequest request
-    ) {
+    public InviteMemberResponse inviteMember(Authentication authentication, @PathVariable Long orgId, @Valid @RequestBody InviteMemberRequest request) {
         return orgService.inviteMember(caller(authentication).userId(), orgId, request.email(), request.role());
     }
 
     /** Logged-in user accepts an invite (email on token must match). */
     @PostMapping("/invites/accept")
-    public OrgMemberResponse acceptInvite(
-            Authentication authentication,
-            @Valid @RequestBody TokenRequest request
-    ) {
+    public OrgMemberResponse acceptInvite(Authentication authentication, @Valid @RequestBody TokenRequest request) {
         return orgService.acceptInvite(caller(authentication).userId(), request.token());
     }
 
@@ -84,22 +77,13 @@ public class OrgController {
     }
 
     @PutMapping("/{orgId}/members/{userId}/role")
-    public OrgMemberResponse changeRole(
-            Authentication authentication,
-            @PathVariable Long orgId,
-            @PathVariable Long userId,
-            @Valid @RequestBody UpdateOrgMemberRoleRequest request
-    ) {
+    public OrgMemberResponse changeRole(Authentication authentication, @PathVariable Long orgId, @PathVariable Long userId, @Valid @RequestBody UpdateOrgMemberRoleRequest request) {
         return orgService.changeRole(caller(authentication).userId(), orgId, userId, request.role());
     }
 
     @DeleteMapping("/{orgId}/members/{userId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void removeMember(
-            Authentication authentication,
-            @PathVariable Long orgId,
-            @PathVariable Long userId
-    ) {
+    public void removeMember(Authentication authentication, @PathVariable Long orgId, @PathVariable Long userId) {
         orgService.removeMember(caller(authentication).userId(), orgId, userId);
     }
 

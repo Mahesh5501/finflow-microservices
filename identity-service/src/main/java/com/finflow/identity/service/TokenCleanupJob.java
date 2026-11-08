@@ -42,7 +42,6 @@ public class TokenCleanupJob {
         int deletedResetTokens = passwordResetTokenRepository.deleteExpiredOrUsed(now);
         int deletedVerificationTokens = emailVerificationTokenRepository.deleteExpiredOrUsed(now);
         int deletedInviteTokens = orgInviteTokenRepository.deleteExpiredOrUsed(now);
-        log.info("Token cleanup done refresh={} reset={} verify={} invite={}",
-                deletedRefreshTokens, deletedResetTokens, deletedVerificationTokens, deletedInviteTokens);
+        log.info("Token cleanup done refresh={} reset={} verify={} invite={}", deletedRefreshTokens, deletedResetTokens, deletedVerificationTokens, deletedInviteTokens);
     }
 }
