@@ -91,10 +91,7 @@ public class AuthService {
             User user = userRepository.save(new User(normalized, passwordEncoder.encode(password)));
             String rawVerify = issueEmailVerification(user);
             auditService.record(user.getId(), null, "USER_REGISTERED", "USER", String.valueOf(user.getId()), normalized);
-            return new RegisterResponse(
-                    toUserProfileResponse(user, List.of(), List.of()),
-                    mailService.isEnabled() ? null : rawVerify
-            );
+            return new RegisterResponse(toUserProfileResponse(user, List.of(), List.of()),mailService.isEnabled() ? null : rawVerify);
         } catch (DataIntegrityViolationException ex) {
             throw ApiException.conflict("EMAIL_ALREADY_EXISTS", "Email already registered");
         }

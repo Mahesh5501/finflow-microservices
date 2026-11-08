@@ -37,9 +37,7 @@ public class MailService {
 
         JavaMailSender sender = mailSender.getIfAvailable();
         if (sender == null) {
-            throw new IllegalStateException(
-                    "mail.enabled=true but spring.mail.* is missing — use application-local.properties"
-            );
+            throw new IllegalStateException("mail.enabled=true but spring.mail.* is missing — use application-local.properties");
         }
         if (from.isBlank()) {
             throw new IllegalStateException("mail.enabled=true requires mail.from");
