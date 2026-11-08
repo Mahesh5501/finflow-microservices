@@ -208,10 +208,7 @@ public class AuthService {
 
         Long userId = stored.getUserId();
 
-        int consumed = refreshTokenRepository.consumeIfUsable(
-                tokenHash,
-                Instant.now()
-        );
+        int consumed = refreshTokenRepository.consumeIfUsable(tokenHash, Instant.now());
 
         if (consumed != 1) {
             throw ApiException.unauthorized(
@@ -273,10 +270,7 @@ public class AuthService {
                             """.formatted(rawResetToken).stripIndent().trim()
                     );
 
-                    return new DevTokenResponse(
-                            message,
-                            mailService.isEnabled() ? null : rawResetToken
-                    );
+                    return new DevTokenResponse(message,mailService.isEnabled() ? null : rawResetToken);
                 })
                 .orElseGet(() -> new DevTokenResponse(message, null));
     }
@@ -300,10 +294,7 @@ public class AuthService {
         // Capture the user ID before the bulk update clears the persistence context.
         Long userId = token.getUserId();
 
-        int consumed = passwordResetTokenRepository.consumeIfUsable(
-                tokenHash,
-                Instant.now()
-        );
+        int consumed = passwordResetTokenRepository.consumeIfUsable(tokenHash, Instant.now());
 
         if (consumed != 1) {
             throw ApiException.unauthorized(
@@ -459,9 +450,7 @@ public class AuthService {
             permissions.addAll(membership.getRole().permissions());
         }
 
-        return new OrgAccess(
-                orgIds,
-                List.copyOf(permissions)
+        return new OrgAccess(orgIds,List.copyOf(permissions)
         );
     }
 
@@ -473,11 +462,7 @@ public class AuthService {
         return email.trim().toLowerCase(Locale.ROOT);
     }
 
-    private static UserProfileResponse toUserProfileResponse(
-            User user,
-            List<Long> orgIds,
-            List<String> permissions
-    ) {
+    private static UserProfileResponse toUserProfileResponse(User user, List<Long> orgIds, List<String> permissions) {
         return new UserProfileResponse(
                 user.getId(),
                 user.getEmail(),
