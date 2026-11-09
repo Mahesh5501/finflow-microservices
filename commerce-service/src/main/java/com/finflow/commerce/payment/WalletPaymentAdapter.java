@@ -15,22 +15,9 @@ import java.util.Map;
 
 /**
  * Real payment adapter that communicates with Wallet Service over HTTP.
- *
- * Commerce Service does not directly access Wallet Service's database.
- * It communicates through Wallet Service APIs.
- *
- * This adapter:
- * 1. Finds the customer's wallet.
- * 2. Checks the wallet currency.
- * 3. Calls the withdrawal API for charges.
- * 4. Calls the deposit API for refunds.
- * 5. Converts wallet responses into PaymentResult.
- *
- * Spring activates this adapter only when:
- *
- * payment.provider=wallet
- *
- * The CircuitBreaker annotation integrates this class with Resilience4j.
+ * Commerce Service does not directly access Wallet Service's database. It communicates through Wallet Service APIs.
+ * This adapter: 1. Finds the customer's wallet. 2. Checks the wallet currency. 3. Calls the withdrawal API for charges. 4. Calls the deposit API for refunds. 5. Converts wallet responses into PaymentResult.
+ * Spring activates this adapter only when: payment.provider=wallet
  */
 @Component
 @ConditionalOnProperty(
@@ -42,29 +29,19 @@ public class WalletPaymentAdapter implements PaymentPort {
 
     /*
      * RestClient is Spring's synchronous HTTP client.
-     *
-     * We use it to call Wallet Service endpoints.
-     *
-     * It is configured with the Wallet Service base URL
-     * in PaymentConfig.
+     * We use it to call Wallet Service endpoints. It is configured with the Wallet Service base URL in PaymentConfig.
      */
     private final RestClient walletRestClient;
 
     /*
      * ObjectMapper converts JSON response bodies into a JSON tree.
-     *
-     * We use it to extract a machine-readable error code
-     * from Wallet Service error responses.
+     * We use it to extract a machine-readable error code from Wallet Service error responses.
      */
     private final ObjectMapper objectMapper;
 
     /**
      * Constructor injection.
-     *
-     * Spring supplies the configured RestClient and ObjectMapper.
-     *
-     * Using final fields ensures that these dependencies cannot
-     * be reassigned after construction.
+     * Spring supplies the configured RestClient and ObjectMapper. Using final fields ensures that these dependencies cannot be reassigned after construction.
      */
     public WalletPaymentAdapter(
             RestClient walletRestClient,
@@ -76,13 +53,7 @@ public class WalletPaymentAdapter implements PaymentPort {
 
     /**
      * Charges the customer's wallet.
-     *
-     * Flow:
-     * 1. Validate the caller's access token.
-     * 2. Find the customer's wallet.
-     * 3. Verify the wallet currency.
-     * 4. Call the wallet withdrawal endpoint.
-     * 5. Convert the response into PaymentResult.
+     * Flow: 1. Validate the caller's access token. 2. Find the customer's wallet. 3. Verify the wallet currency. 4. Call the wallet withdrawal endpoint. 5. Convert the response into PaymentResult.
      */
     @Override
     public PaymentResult charge(PaymentChargeRequest request) {
@@ -105,9 +76,7 @@ public class WalletPaymentAdapter implements PaymentPort {
             }
 
             // Perform the actual wallet withdrawal.
-            //
-            // The same idempotency key must be reused for retries
-            // of this logical payment operation.
+            // The same idempotency key must be reused for retries of this logical payment operation.
             TransactionView tx = withdraw(
                     wallet.walletId(),
                     request.amount(),
@@ -115,8 +84,7 @@ public class WalletPaymentAdapter implements PaymentPort {
                     request.accessToken()
             );
 
-            // Convert the wallet transaction response into our
-            // provider-independent payment result.
+            // Convert the wallet transaction response into our provider-independent payment result.
             return PaymentResult.approved(
                     wallet.walletId(),
                     tx.id()
@@ -124,56 +92,39 @@ public class WalletPaymentAdapter implements PaymentPort {
 
         } catch (WalletDeclineException ex) {
 
-            // Known business rejection, such as wallet not found
-            // or insufficient balance.
+            // Known business rejection, such as wallet not found or insufficient balance.
             return PaymentResult.declined(ex.code());
 
         } catch (RestClientResponseException ex) {
 
-            // A 4xx response represents a client/business rejection
-            // according to this adapter's current contract.
+            // A 4xx response represents a client/business rejection according to this adapter's current contract.
             if (ex.getStatusCode().is4xxClientError()) {
                 return PaymentResult.declined(readCode(ex));
             }
 
-            // A server-side response may be ambiguous.
-            // Do not automatically release stock because the wallet
-            // may already have processed the request.
+            // A server-side response may be ambiguous. Do not automatically release stock because the wallet may already have processed the request.
             return PaymentResult.uncertain("WALLET_UNAVAILABLE");
 
         } catch (Exception ex) {
 
-            // Network errors, response conversion failures and other
-            // unexpected exceptions are currently normalized as uncertain.
-            //
-            // This is deliberately not treated as a definite decline.
+            // Network errors, response conversion failures and other unexpected exceptions are currently normalized as uncertain. This is deliberately not treated as a definite decline.
             return PaymentResult.uncertain("WALLET_UNAVAILABLE");
         }
     }
 
     /**
      * Refunds money to the customer's wallet.
-     *
-     * Flow:
-     * 1. Validate the caller's token.
-     * 2. Use the supplied wallet ID if available.
-     * 3. Otherwise resolve the customer's wallet.
-     * 4. Call the wallet deposit endpoint.
-     * 5. Convert the response into PaymentResult.
+     * Flow: 1. Validate the caller's token. 2. Use the supplied wallet ID if available. 3. Otherwise resolve the customer's wallet. 4. Call the wallet deposit endpoint. 5. Convert the response into PaymentResult.
      */
     @Override
     public PaymentResult refund(PaymentRefundRequest request) {
 
         // Authentication is required for the wallet API call.
         requireToken(request.accessToken());
-
         // Prefer the wallet ID recorded during the original payment.
         Long walletId = request.walletId();
-
         try {
-
-            // If the original wallet ID is unavailable,
-            // look up the customer's wallet.
+            // If the original wallet ID is unavailable, look up the customer's wallet.
             if (walletId == null) {
                 walletId = getOwnWallet(
                         request.customerUserId(),
@@ -199,27 +150,24 @@ public class WalletPaymentAdapter implements PaymentPort {
 
         } catch (RestClientResponseException ex) {
 
-            // Treat client errors as known rejections under the
-            // current Wallet Service API contract.
+            // Treat client errors as known rejections under the current Wallet Service API contract.
             if (ex.getStatusCode().is4xxClientError()) {
                 return PaymentResult.declined(readCode(ex));
             }
 
-            // Server error: the refund result may be unknown.
+            // Server error: the refund result may be unknown. Server error: the refund result may be unknown.
             return PaymentResult.uncertain("WALLET_UNAVAILABLE");
 
         } catch (Exception ex) {
 
-            // Unknown result: reconciliation may be required.
+            // Unknown result: reconciliation may be required. Unknown result: reconciliation may be required.
             return PaymentResult.uncertain("WALLET_UNAVAILABLE");
         }
     }
 
     /**
      * Retrieves the wallet belonging to a customer.
-     *
      * GET /api/v1/users/{userId}/wallet
-     *
      * The caller's JWT is forwarded to Wallet Service.
      */
     private WalletView getOwnWallet(Long userId, String accessToken) {
@@ -245,22 +193,19 @@ public class WalletPaymentAdapter implements PaymentPort {
 
         } catch (RestClientResponseException ex) {
 
-            // A missing wallet is represented as a known business
-            // rejection rather than a generic server failure.
+            // A missing wallet is represented as a known business rejection rather than a generic server failure.
             if (ex.getStatusCode().value() == 404) {
                 throw new WalletDeclineException("WALLET_NOT_FOUND");
             }
 
-            // Other HTTP errors are handled by the calling method.
+            // Other HTTP errors are handled by the calling method. Other HTTP errors are handled by the calling method.
             throw ex;
         }
     }
 
     /**
      * Withdraws money from a wallet.
-     *
      * POST /api/v1/wallets/{walletId}/withdrawals
-     *
      * This is the actual debit operation.
      */
     private TransactionView withdraw(
@@ -303,22 +248,19 @@ public class WalletPaymentAdapter implements PaymentPort {
 
         } catch (RestClientResponseException ex) {
 
-            // The current Wallet Service contract uses 422
-            // for a withdrawal business rejection.
+            // The current Wallet Service contract uses 422 for a withdrawal business rejection.
             if (ex.getStatusCode().value() == 422) {
                 throw new WalletDeclineException(readCode(ex));
             }
 
-            // Let the outer charge method classify other HTTP errors.
+            // Let the outer charge method classify other HTTP errors. Let the outer charge method classify other HTTP errors.
             throw ex;
         }
     }
 
     /**
      * Deposits money into a wallet.
-     *
      * POST /api/v1/wallets/{walletId}/deposits
-     *
      * This is used for refunds in the current project.
      */
     private TransactionView deposit(
@@ -358,15 +300,7 @@ public class WalletPaymentAdapter implements PaymentPort {
 
     /**
      * Extracts a machine-readable error code from the HTTP response body.
-     *
-     * Expected example:
-     *
-     * {
-     *     "code": "INSUFFICIENT_BALANCE"
-     * }
-     *
-     * If the response body is missing or invalid JSON,
-     * return a safe fallback error code.
+     * Expected example: { "code": "INSUFFICIENT_BALANCE" } If the response body is missing or invalid JSON, return a safe fallback error code.
      */
     private String readCode(RestClientResponseException ex) {
 
@@ -393,7 +327,6 @@ public class WalletPaymentAdapter implements PaymentPort {
 
     /**
      * Validates that an access token is available.
-     *
      * A missing token must not result in an unauthenticated wallet request.
      */
     private static void requireToken(String accessToken) {
@@ -405,10 +338,7 @@ public class WalletPaymentAdapter implements PaymentPort {
 
     /**
      * Ensures the Authorization header has the Bearer prefix.
-     *
-     * Accepts either:
-     * - eyJhbGciOi...
-     * - Bearer eyJhbGciOi...
+     * Accepts either: - eyJhbGciOi... - Bearer eyJhbGciOi...
      */
     private static String bearer(String accessToken) {
 
@@ -419,9 +349,7 @@ public class WalletPaymentAdapter implements PaymentPort {
 
     /**
      * Minimal representation of a wallet API response.
-     *
      * We only model the fields Commerce Service needs.
-     *
      * This is not a JPA entity. It is a response-mapping record.
      */
     public record WalletView(
@@ -442,29 +370,12 @@ public class WalletPaymentAdapter implements PaymentPort {
 
     /**
      * Internal exception for known wallet business rejections.
-     *
      * This exception is private to this adapter.
      * The public contract remains PaymentResult.
      */
-    private static final class WalletDeclineException
-            extends RuntimeException {
-
-        // Machine-readable reason for the decline.
+    private static final class WalletDeclineException extends RuntimeException {
         private final String code;
-
-        private WalletDeclineException(String code) {
-
-            // Set the exception message for diagnostic purposes.
-            super(code);
-
-            this.code = code;
-        }
-
-        /**
-         * Returns the machine-readable decline code.
-         */
-        private String code() {
-            return code;
-        }
+        private WalletDeclineException(String code) { super(code); this.code = code; }
+        private String code() { return code; }
     }
 }

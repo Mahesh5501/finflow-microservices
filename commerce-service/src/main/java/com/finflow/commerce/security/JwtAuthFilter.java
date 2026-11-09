@@ -23,26 +23,33 @@ import java.util.List;
 
 /**
  * JWT authentication filter.
- *
- * Runs once per request and checks whether the request contains
- * a valid Bearer access token.
- *
- * If the token is valid, it creates an authenticated principal
- * and stores it in Spring Security's SecurityContext.
+ * - Runs once per request and checks whether the request contains a valid Bearer access token.
+ * - If the token is valid, it creates an authenticated principal and stores it in Spring Security's SecurityContext.
  */
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
 
-    // Provides RSA public keys from the identity-service JWKS endpoint.
+    /**
+     * Provides RSA public keys from the identity-service JWKS endpoint.
+     * @return the JwksKeyProvider.
+     */
     private final JwksKeyProvider jwksKeyProvider;
 
-    // Constructor injection: Spring provides the key provider.
+    /**
+     * Constructor injection: Spring provides the key provider.
+     * @param jwksKeyProvider the JwksKeyProvider.
+     */
     public JwtAuthFilter(JwksKeyProvider jwksKeyProvider) {
         this.jwksKeyProvider = jwksKeyProvider;
     }
 
     /**
      * Executes the JWT authentication logic for the current request.
+     * @param request the HttpServletRequest.
+     * @param response the HttpServletResponse.
+     * @param filterChain the FilterChain.
+     * @throws ServletException if a servlet exception occurs.
+     * @throws IOException if an I/O exception occurs.
      */
     @Override
     protected void doFilterInternal(
@@ -51,59 +58,86 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
-        // Read the HTTP Authorization header.
-        // Expected format: Bearer <JWT>.
+        /**
+         * Read the HTTP Authorization header.
+         * Expected format: Bearer <JWT>.
+         */
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
 
-        // Only attempt JWT parsing when the header uses Bearer authentication.
+        /**
+         * Only attempt JWT parsing when the header uses Bearer authentication.
+         */
         if (header != null && header.startsWith("Bearer ")) {
 
             try {
-                // Remove "Bearer " and keep the actual JWT string.
+                /**
+                 * Remove "Bearer " and keep the actual JWT string.
+                 */
                 String raw = header.substring(7);
 
-                // Build the JWT parser.
+                /**
+                 * Build the JWT parser.
+                 */
                 Claims claims = Jwts.parser()
 
-                        // JJWT calls this locator to find the verification key.
-                        // The JWT header contains the key ID (kid).
+                        /**
+                         * JJWT calls this locator to find the verification key.
+                         */
                         .keyLocator(new LocatorAdapter<Key>() {
 
                             @Override
                             protected Key locate(JwsHeader header) {
 
-                                // Find the RSA public key matching the JWT's kid.
+                                /**
+                                 * Find the RSA public key matching the JWT's kid.
+                                 */
                                 return jwksKeyProvider.getKey(
                                         header.getKeyId()
                                 );
                             }
                         })
 
-                        // Build the parser.
+                        /**
+                         * Build the parser.
+                         */
                         .build()
 
                         // Parse and verify the signed JWT.
-                        // A successful call returns its claims.
+                        /**
+                         * A successful call returns its claims.
+                         */
                         .parseSignedClaims(raw)
 
-                        // Extract the JWT payload.
+                        /**
+                         * Extract the JWT payload.
+                         */
                         .getPayload();
 
-                // The JWT subject (sub) contains the user ID.
+                /**
+                 * The JWT subject (sub) contains the user ID.
+                 */
                 Long userId = Long.valueOf(claims.getSubject());
 
-                // Extract the email claim.
+                /**
+                 * Extract the email claim.
+                 */
                 String email = claims.get("email", String.class);
 
-                // Extract permission values from the JWT.
+                /**
+                 * Extract permission values from the JWT.
+                 */
                 List<String> permissions =
                         stringList(claims.get("permissions"));
 
-                // Extract organisation IDs from the JWT.
+                /**
+                 * Extract organisation IDs from the JWT.
+                 */
                 List<Long> orgIds =
                         longList(claims.get("orgIds"));
 
-                // Build the application-specific authenticated principal.
+                /**
+                 * Build the application-specific authenticated principal.
+                 */
                 var principal = new AuthenticatedUser(
                         userId,
                         email,
@@ -111,11 +145,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                         permissions
                 );
 
-                // Create a Spring Security authentication object.
-                //
-                // Principal: authenticated caller.
-                // Credentials: null because JWT authentication is already done.
-                // Authorities: permissions used by Spring Security.
+                /**
+                 * Create a Spring Security authentication object.
+                 */
+                /**
+                 * Principal: authenticated caller.
+                 * Credentials: null because JWT authentication is already done.
+                 * Authorities: permissions used by Spring Security.
+                 */
                 var auth = new UsernamePasswordAuthenticationToken(
                         principal,
                         null,
@@ -124,31 +161,39 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                         )
                 );
 
-                // Store authentication for the current request.
-                // Controllers can now access it through Authentication.
+                /**
+                 * Store authentication for the current request.
+                 */
+                /**
+                 * Controllers can now access it through Authentication.
+                 */
                 SecurityContextHolder.getContext()
                         .setAuthentication(auth);
 
             } catch (Exception ignored) {
 
-                // If token parsing, signature verification, key lookup,
-                // or claim conversion fails, remove any existing authentication.
-                //
-                // The request continues through the filter chain.
-                // Protected endpoints will subsequently be rejected
-                // by Spring Security because the caller is unauthenticated.
+                /**
+                 * If token parsing, signature verification, key lookup,
+                 * or claim conversion fails, remove any existing authentication.
+                 * The request continues through the filter chain.
+                 * Protected endpoints will subsequently be rejected
+                 * by Spring Security because the caller is unauthenticated.
+                 */
                 SecurityContextHolder.clearContext();
             }
         }
 
-        // Continue executing the remaining filters and eventually
-        // the controller, if security authorises the request.
+        /**
+         * Continue executing the remaining filters and eventually
+         * the controller, if security authorises the request.
+         */
         filterChain.doFilter(request, response);
     }
 
     /**
      * Converts a collection of permission claim values into strings.
      *
+     * @param raw the raw claim.
      * If the claim is missing or is not a collection,
      * returns an empty list.
      */

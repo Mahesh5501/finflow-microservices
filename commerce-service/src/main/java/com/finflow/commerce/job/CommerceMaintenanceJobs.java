@@ -13,24 +13,14 @@ import java.time.temporal.ChronoUnit;
 
 /**
  * Coordinates recurring maintenance tasks for the Commerce Service.
- *
  * This class decides WHEN maintenance tasks should run.
- *
- * The actual business operations are delegated to:
- * - ReservationExpiryService
- * - AbandonedCartCleanupService
- *
- * Keeping scheduling separate from business logic makes the
- * services easier to test and reuse.
+ * The actual business operations are delegated to ReservationExpiryService and AbandonedCartCleanupService.
+ * Keeping scheduling separate from business logic makes the services easier to test and reuse.
  */
 @Component
-
 /**
  * Registers this component only when the maintenance property is enabled.
- *
- * If commerce.maintenance.enabled is missing, maintenance is enabled
- * because matchIfMissing = true.
- *
+ * If commerce.maintenance.enabled is missing, maintenance is enabled because matchIfMissing = true.
  * Set commerce.maintenance.enabled=false to disable these jobs.
  */
 @ConditionalOnProperty(
@@ -40,26 +30,15 @@ import java.time.temporal.ChronoUnit;
 )
 public class CommerceMaintenanceJobs {
 
-    // Handles expiration of unpaid order reservations.
-    private final ReservationExpiryService reservationExpiryService;
-
-    // Handles deletion of abandoned shopping carts.
-    private final AbandonedCartCleanupService abandonedCartCleanupService;
-
-    // How long an order can remain unpaid before its reservation expires.
-    private final long reservationTtlMinutes;
-
-    // How long a cart can remain untouched before it is considered abandoned.
-    private final long cartAbandonHours;
+    private final ReservationExpiryService reservationExpiryService; // Handles expiration of unpaid order reservations.
+    private final AbandonedCartCleanupService abandonedCartCleanupService; // Handles deletion of abandoned shopping carts.
+    private final long reservationTtlMinutes; // How long an order can remain unpaid before its reservation expires.
+    private final long cartAbandonHours; // How long a cart can remain untouched before it is considered abandoned.
 
     /**
      * Constructor injection.
-     *
      * @Value reads configurable values from application properties.
-     *
-     * Defaults:
-     * - Reservation TTL: 30 minutes.
-     * - Cart abandonment threshold: 72 hours.
+     * Defaults: Reservation TTL: 30 minutes. Cart abandonment threshold: 72 hours.
      */
     public CommerceMaintenanceJobs(
             ReservationExpiryService reservationExpiryService,
@@ -77,16 +56,9 @@ public class CommerceMaintenanceJobs {
 
     /**
      * Scheduled job for expiring unpaid order reservations.
-     *
-     * fixedDelayString:
-     * Waits the configured delay after the previous execution finishes
-     * before starting the next execution.
-     *
+     * fixedDelayString: Waits the configured delay after the previous execution finishes before starting the next execution.
      * Default delay: 60,000 milliseconds (60 seconds).
-     *
-     * SchedulerLock:
-     * Prevents multiple application instances from executing this
-     * scheduled task simultaneously, using ShedLock.
+     * SchedulerLock: Prevents multiple application instances from executing this scheduled task simultaneously, using ShedLock.
      */
     @Scheduled(
             fixedDelayString =
@@ -111,10 +83,7 @@ public class CommerceMaintenanceJobs {
 
     /**
      * Scheduled job for removing abandoned carts.
-     *
-     * Default delay: 300,000 milliseconds (5 minutes).
-     *
-     * The cart abandonment threshold defaults to 72 hours.
+     * Default delay: 300,000 milliseconds (5 minutes). The cart abandonment threshold defaults to 72 hours.
      */
     @Scheduled(
             fixedDelayString =

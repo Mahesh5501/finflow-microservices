@@ -5,31 +5,18 @@ import com.finflow.commerce.entity.Category;
 
 /**
  * Response DTO containing category details.
- *
- * The static from() method converts a JPA Category entity
- * into the API response representation.
+ * A record is suitable because this DTO carries response data and does not need mutable fields.
  */
 public record CategoryResponse(
-
-        // Database-generated category identifier.
-        Long categoryId,
-
-        // Organisation that owns the category.
-        Long organisationId,
-
-        // Human-readable category name.
-        String name,
-
-        // URL-friendly category identifier.
-        String slug
-
+        Long categoryId, // Database-generated category identifier.
+        Long organisationId, // Organisation that owns the category.
+        String name, // Human-readable category name.
+        String slug // URL-friendly category identifier.
 ) {
 
     /**
      * Converts a Category entity into a CategoryResponse.
-     *
-     * Keeping this mapping method here avoids repeating the
-     * same entity-to-response conversion in service methods.
+     * Keeping this mapping method here avoids repeating the same entity-to-response conversion in service methods.
      */
     public static CategoryResponse from(Category category) {
         return new CategoryResponse(

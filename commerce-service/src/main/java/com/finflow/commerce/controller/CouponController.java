@@ -16,43 +16,41 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * REST controller responsible for coupon creation.
- *
- * The actual coupon validation, organisation access checks
- * and persistence are handled by CommerceService.
+ * The actual coupon validation, organisation access checks and persistence are handled by CommerceService.
  */
 @RestController
 @RequestMapping("/api/v1/coupons")
 public class CouponController {
 
-    private final CommerceService commerceService;
+    private final CommerceService commerceService; // CommerceService contains coupon creation and validation logic.
 
+    /**
+     * Constructor injection.
+     * Spring injects the CommerceService bean when creating this controller.
+     */
     public CouponController(CommerceService commerceService) {
-        this.commerceService = commerceService;
+        this.commerceService = commerceService; // Inject the CommerceService bean when creating this controller.
     }
 
     /**
      * POST /api/v1/coupons
-     *
      * Creates a coupon for one of the caller's organisations.
-     *
      * @Valid validates the incoming CouponRequest.
      * HTTP 201 indicates successful resource creation.
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public CouponResponse create(
-            @Valid @RequestBody CouponRequest request,
-            Authentication authentication
-    ) {
+    public CouponResponse create(@Valid @RequestBody CouponRequest request, Authentication authentication) {
+        AuthenticatedUser user = caller(authentication); // Extract the authenticated user's identity and organisation access.
+        return commerceService.createCoupon(user.orgIds(), request); // Delegate coupon creation to the service.
+    }
 
-        // Extract the authenticated user and their organisation memberships.
-        AuthenticatedUser user =
-                (AuthenticatedUser) authentication.getPrincipal();
-
-        // Delegate coupon creation to the service.
-        return commerceService.createCoupon(
-                user.orgIds(),
-                request
-        );
+    /**
+     * Extracts our custom AuthenticatedUser from Spring Security.
+     * The JWT authentication flow places AuthenticatedUser inside Authentication.getPrincipal().
+     * Keeping this extraction in one helper avoids repeating the same cast in every endpoint.
+     */
+    private static AuthenticatedUser caller(Authentication authentication) {
+        return (AuthenticatedUser) authentication.getPrincipal();
     }
 }

@@ -8,26 +8,17 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Configures programmatic transaction management.
- *
- * Exposes TransactionTemplate as a Spring bean so that
- * services can execute code inside explicitly controlled transactions.
+ * Exposes TransactionTemplate as a Spring bean so that services can execute code inside explicitly controlled transactions.
  */
 @Configuration
 public class TransactionConfig {
 
     /**
      * Creates a TransactionTemplate using Spring's transaction manager.
-     *
-     * PlatformTransactionManager controls transaction begin,
-     * commit and rollback operations.
+     * PlatformTransactionManager controls transaction begin, commit and rollback operations.
      */
     @Bean
-    TransactionTemplate transactionTemplate(
-            PlatformTransactionManager transactionManager
-    ) {
-
-        // TransactionTemplate delegates transaction handling
-        // to the supplied transaction manager.
-        return new TransactionTemplate(transactionManager);
+    TransactionTemplate transactionTemplate(PlatformTransactionManager transactionManager) {
+        return new TransactionTemplate(transactionManager); // TransactionTemplate delegates transaction handling to the supplied transaction manager.
     }
 }

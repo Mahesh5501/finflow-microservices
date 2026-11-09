@@ -8,35 +8,20 @@ import java.time.Instant;
 
 /**
  * Response DTO representing a coupon.
- *
- * It exposes coupon details without returning the JPA entity directly.
+ * A record is suitable because this DTO carries response data and does not need mutable fields.
  */
 public record CouponResponse(
-
-        // Database-generated coupon identifier.
-        Long couponId,
-
-        // Organisation that owns this coupon.
-        Long organisationId,
-
-        // Normalised coupon code.
-        String code,
-
-        // Discount percentage.
-        BigDecimal percentOff,
-
-        // Whether the coupon is currently active.
-        boolean active,
-
-        // Optional coupon expiry date/time.
-        Instant expiresAt
-
+        Long couponId, // Database-generated coupon identifier.
+        Long organisationId, // Organisation that owns this coupon.
+        String code, // Normalised coupon code.
+        BigDecimal percentOff, // Discount percentage.
+        boolean active, // Whether the coupon is currently active.
+        Instant expiresAt // Optional coupon expiry date/time.
 ) {
 
     /**
      * Converts a Coupon entity into a CouponResponse.
-     *
-     * This keeps entity-to-response conversion in one place.
+     * Keeping this mapping method here avoids repeating the same entity-to-response conversion in service methods.
      */
     public static CouponResponse from(Coupon coupon) {
         return new CouponResponse(

@@ -6,30 +6,10 @@ import jakarta.validation.constraints.Size;
 
 /**
  * Request DTO used when a customer asks to return an order.
- *
- * This is a Java record, so Java automatically generates:
- * - Constructor
- * - Accessor method
- * - equals()
- * - hashCode()
- * - toString()
- *
- * The request currently contains one field: reason.
+ * A record is suitable because this DTO carries request data and does not need mutable fields. 
+ * The request currently contains one field: reason. The reason is supplied by the customer when they ask to return an order.
  */
 public record ReturnRequestBody(
-
-        /**
-         * Return reason supplied by the customer.
-         *
-         * @NotBlank:
-         * Rejects null, empty and whitespace-only values.
-         *
-         * @Size(max = 500):
-         * Restricts the reason to a maximum of 500 characters.
-         */
-        @NotBlank
-        @Size(max = 500)
-        String reason
-
+        @NotBlank @Size(max = 500) String reason // Return reason supplied by the customer. Rejects null, empty and whitespace-only values. Restricts the reason to a maximum of 500 characters.
 ) {
 }

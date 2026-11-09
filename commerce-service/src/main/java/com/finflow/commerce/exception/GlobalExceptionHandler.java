@@ -16,7 +16,6 @@ import java.util.Map;
 
 /**
  * Central exception handler for REST controllers.
- *
  * Converts application exceptions into consistent HTTP responses.
  */
 @RestControllerAdvice
@@ -24,12 +23,13 @@ public class GlobalExceptionHandler {
 
     /**
      * Handles custom business/API exceptions.
-     *
      * Uses the status and error code supplied by ApiException.
+     * @param ex the ApiException that occurred
+     * @return a ResponseEntity with the HTTP status, error code and human-readable message
      */
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<Map<String, String>> api(ApiException ex) {
-
+        // Return the HTTP status and error code from the ApiException.
         return ResponseEntity.status(ex.getStatus())
                 .body(Map.of(
                         "code", ex.getCode(),
@@ -39,17 +39,15 @@ public class GlobalExceptionHandler {
 
     /**
      * Handles validation failures for request bodies.
-     *
-     * Example:
-     * ProductRequest has @NotBlank on its name field,
-     * but the client sends an empty name.
+     * Example: ProductRequest has @NotBlank on its name field, but the client sends an empty name.
+     * @param ex the MethodArgumentNotValidException that occurred
+     * @return a ResponseEntity with the HTTP status, error code and human-readable message
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> validation(
             MethodArgumentNotValidException ex) {
 
-        // Extract every field-level validation error.
-        // Example: "name: must not be blank".
+        // Extract every field-level validation error. Example: "name: must not be blank".
         List<String> details = ex.getBindingResult()
                 .getFieldErrors()
                 .stream()
@@ -58,8 +56,7 @@ public class GlobalExceptionHandler {
                 )
                 .toList();
 
-        // Return HTTP 400 with a common error code,
-        // a general message and individual validation details.
+        // Return HTTP 400 with a common error code, a general message and individual validation details.
         return ResponseEntity.badRequest()
                 .body(Map.of(
                         "code", "VALIDATION_FAILED",
@@ -70,11 +67,9 @@ public class GlobalExceptionHandler {
 
     /**
      * Handles common client-side request errors.
-     *
-     * Includes:
-     * - ConstraintViolationException
-     * - IllegalArgumentException
-     * - MissingRequestHeaderException
+     * Includes ConstraintViolationException, IllegalArgumentException and MissingRequestHeaderException.
+     * @param ex the Exception that occurred
+     * @return a ResponseEntity with the HTTP status, error code and human-readable message
      */
     @ExceptionHandler({
             ConstraintViolationException.class,
@@ -92,9 +87,9 @@ public class GlobalExceptionHandler {
 
     /**
      * Handles optimistic-locking conflicts.
-     *
-     * This can happen when another transaction updates a versioned
-     * entity before the current transaction completes.
+     * This can happen when another transaction updates a versioned entity before the current transaction completes.
+     * @param ex the OptimisticLockingFailureException that occurred
+     * @return a ResponseEntity with the HTTP status, error code and human-readable message
      */
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ResponseEntity<Map<String, String>> optimisticLock(
@@ -110,9 +105,9 @@ public class GlobalExceptionHandler {
 
     /**
      * Handles database integrity conflicts.
-     *
-     * Example: attempting to insert a value that violates a
-     * database uniqueness constraint.
+     * Example: attempting to insert a value that violates a database uniqueness constraint.
+     * @param ex the DataIntegrityViolationException that occurred
+     * @return a ResponseEntity with the HTTP status, error code and human-readable message
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, String>> dataConflict(

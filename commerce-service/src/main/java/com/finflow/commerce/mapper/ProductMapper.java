@@ -7,25 +7,18 @@ import org.springframework.stereotype.Component;
 
 /**
  * Converts Product entities into ProductResponse DTOs.
- *
- * The mapper keeps entity-to-response conversion out of the service
- * and controller layers.
+ * The mapper keeps entity-to-response conversion out of the service and controller layers.
  */
 @Component
 public class ProductMapper {
 
     /**
-     * Converts a Product entity into a ProductResponse.
-     *
-     * @param p            Product entity loaded from the database.
-     * @param categoryName Name of the product's category.
+     * Converts a Product entity into a ProductResponse. Returns the ProductResponse containing the API-facing product data.
+     * @param p the Product entity loaded from the database.
+     * @param categoryName the name of the product's category.
      * @return ProductResponse containing the API-facing product data.
      */
-    public ProductResponse toResponse(
-            Product p,
-            String categoryName
-    ) {
-
+    public ProductResponse toResponse(Product p, String categoryName) {
         return new ProductResponse(
                 p.getProductId(),
                 p.getOrganisationId(),

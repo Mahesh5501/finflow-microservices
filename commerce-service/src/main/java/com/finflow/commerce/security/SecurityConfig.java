@@ -21,10 +21,16 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 public class SecurityConfig {
 
-    // Custom filter that extracts and verifies JWT access tokens.
+    /**
+     * Custom filter that extracts and verifies JWT access tokens.
+     * @return the JwtAuthFilter.
+     */
     private final JwtAuthFilter jwtAuthFilter;
 
-    // Constructor injection of the JWT filter.
+    /**
+     * Constructor injection of the JWT filter.
+     * @param jwtAuthFilter the JwtAuthFilter.
+     */
     public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
     }
@@ -32,6 +38,9 @@ public class SecurityConfig {
     /**
      * Creates the security filter chain.
      *
+     * @param http the HttpSecurity.
+     * @return the SecurityFilterChain.
+     * @throws Exception if an exception occurs.
      * This method defines which requests are public,
      * which permissions are required, and how security failures
      * should be returned to API clients.
@@ -43,22 +52,33 @@ public class SecurityConfig {
 
         http
 
-                // Disable CSRF protection.
+                /**
+                 * Disable CSRF protection.
+                 */
                 // This application uses stateless Bearer-token authentication
                 // rather than browser-managed session cookies.
                 .csrf(csrf -> csrf.disable())
 
-                // Enable CORS using Spring's configured defaults.
-                // Actual allowed origins/methods depend on CORS configuration.
+                /**
+                 * Enable CORS using Spring's configured defaults.
+                 * Actual allowed origins/methods depend on CORS configuration.
+                 */
                 .cors(Customizer.withDefaults())
 
-                // Disable HTTP Basic authentication.
+                /**
+                 * Disable HTTP Basic authentication.
+                 */
                 .httpBasic(basic -> basic.disable())
 
-                // Disable form-based login.
+                /**
+                 * Disable form-based login.
+                 */
                 .formLogin(form -> form.disable())
 
-                // Do not create or use an HTTP session for authentication.
+                /**
+                 * Do not create or use an HTTP session for authentication.
+                 * Each request must carry its own access token.
+                 */
                 // Each request must carry its own access token.
                 .sessionManagement(sm ->
                         sm.sessionCreationPolicy(
@@ -66,54 +86,74 @@ public class SecurityConfig {
                         )
                 )
 
-                // Define authorisation rules for incoming requests.
+                /**
+                 * Define authorisation rules for incoming requests.
+                 */
                 .authorizeHttpRequests(auth -> auth
 
-                        // Health and application-info endpoints are public.
+                        /**
+                         * Health and application-info endpoints are public.
+                         */
                         .requestMatchers(
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()
 
-                        // GET API requests require read permission.
+                        /**
+                         * GET API requests require read permission.
+                         */
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/**"
                         ).hasAuthority("commerce:read")
 
-                        // POST API requests require write permission.
+                        /**
+                         * POST API requests require write permission.
+                         */
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/**"
                         ).hasAuthority("commerce:write")
 
-                        // PUT API requests require write permission.
+                        /**
+                         * PUT API requests require write permission.
+                         */
                         .requestMatchers(
                                 HttpMethod.PUT,
                                 "/api/v1/**"
                         ).hasAuthority("commerce:write")
 
-                        // PATCH API requests require write permission.
+                        /**
+                         * PATCH API requests require write permission.
+                         */
                         .requestMatchers(
                                 HttpMethod.PATCH,
                                 "/api/v1/**"
                         ).hasAuthority("commerce:write")
 
-                        // DELETE API requests require write permission.
+                        /**
+                         * DELETE API requests require write permission.
+                         */
                         .requestMatchers(
                                 HttpMethod.DELETE,
                                 "/api/v1/**"
                         ).hasAuthority("commerce:write")
 
-                        // Any request not matched above must still be authenticated.
+                        /**
+                         * Any request not matched above must still be authenticated.
+                         */
                         .anyRequest().authenticated()
                 )
 
-                // Configure responses for authentication and authorisation failures.
+                        /**
+                 * Configure responses for authentication and authorisation failures.
+                 */
                 .exceptionHandling(ex -> ex
 
                         // Authentication entry point:
-                        // used when the caller is not authenticated.
+                        /**
+                         * used when the caller is not authenticated.
+                         */
                         .authenticationEntryPoint(
                                 (request, response, authException) -> {
                                     response.setStatus(401);
@@ -125,8 +165,12 @@ public class SecurityConfig {
                                 }
                         )
 
-                        // Access denied handler:
-                        // used when the caller is authenticated
+                        /**
+                         * Access denied handler:
+                         */
+                        /**
+                         * used when the caller is authenticated
+                         */
                         // but lacks the required permission.
                         .accessDeniedHandler(
                                 (request, response, accessDeniedException) -> {

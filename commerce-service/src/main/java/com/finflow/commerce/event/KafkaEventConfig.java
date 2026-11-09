@@ -21,9 +21,7 @@ import java.util.Map;
 
 /**
  * Kafka producer configuration for Commerce domain events.
- *
- * This configuration is loaded only when Kafka publishing
- * is explicitly enabled.
+ * This configuration is loaded only when Kafka publishing is explicitly enabled.
  */
 @Configuration
 @ConditionalOnProperty(
@@ -34,102 +32,40 @@ public class KafkaEventConfig {
 
     /**
      * Creates KafkaAdmin.
-     *
-     * KafkaAdmin connects to the Kafka cluster and manages
-     * Kafka administrative operations, such as topic creation.
+     * KafkaAdmin connects to the Kafka cluster and manages Kafka administrative operations, such as topic creation.
      */
     @Bean
-    KafkaAdmin kafkaAdmin(
-            @Value("${spring.kafka.bootstrap-servers}")
-            String bootstrapServers
-    ) {
-
-        // KafkaAdmin requires the Kafka bootstrap-server address.
-        return new KafkaAdmin(
-                Map.of(
-                        AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
-                        bootstrapServers
-                )
-        );
+    KafkaAdmin kafkaAdmin(@Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) { // Address of the Kafka cluster.
+        return new KafkaAdmin(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)); // KafkaAdmin requires the Kafka bootstrap-server address.
     }
 
-    /**
-     * Creates the producer factory for Commerce domain events.
-     *
-     * It defines how message keys and values are serialized.
-     */
     @Bean
-    ProducerFactory<String, CommerceDomainEvent>
-    commerceEventProducerFactory(
-            @Value("${spring.kafka.bootstrap-servers}")
-            String bootstrapServers
-    ) {
-
-        // Kafka producer properties.
-        Map<String, Object> props = new HashMap<>();
-
-        // Address of the Kafka cluster.
-        props.put(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
-                bootstrapServers
-        );
-
-        // Serialize message keys as strings.
-        props.put(
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-                StringSerializer.class
-        );
-
-        // Serialize CommerceDomainEvent values as JSON.
-        props.put(
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-                JsonSerializer.class
-        );
-
-        // Do not add Spring type-information headers to JSON messages.
-        props.put(
-                JsonSerializer.ADD_TYPE_INFO_HEADERS,
-                false
-        );
-
-        // Create the Kafka producer factory with these properties.
-        return new DefaultKafkaProducerFactory<>(props);
+    ProducerFactory<String, CommerceDomainEvent> commerceEventProducerFactory(@Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) { // Address of the Kafka cluster.
+        Map<String, Object> props = new HashMap<>(); // Kafka producer properties.
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers); // Address of the Kafka cluster.
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class); // Serialize message keys as strings.
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class); // Serialize CommerceDomainEvent values as JSON.
+        props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false); // Do not add Spring type-information headers to JSON messages.
+        return new DefaultKafkaProducerFactory<>(props); // Create the Kafka producer factory with these properties.
     }
-
     /**
      * Creates the KafkaTemplate used by KafkaCommerceEventPublisher.
-     *
      * The template uses the producer factory defined above.
      */
     @Bean
     KafkaTemplate<String, CommerceDomainEvent>
     commerceEventKafkaTemplate(
-            ProducerFactory<String, CommerceDomainEvent>
-                    commerceEventProducerFactory
+            ProducerFactory<String, CommerceDomainEvent> commerceEventProducerFactory // Producer factory for Commerce domain events.
     ) {
-
-        return new KafkaTemplate<>(commerceEventProducerFactory);
+        return new KafkaTemplate<>(commerceEventProducerFactory); // Create the Kafka template with the producer factory.
     }
 
     /**
      * Declares the Commerce events topic.
-     *
-     * KafkaAdmin can create this topic when it connects
-     * to the Kafka cluster and topic creation is permitted.
+     * KafkaAdmin can create this topic when it connects to the Kafka cluster and topic creation is permitted.
      */
     @Bean
-    NewTopic commerceEventsTopic(
-            @Value("${commerce.events.topic:commerce.events}")
-            String topic
-    ) {
-
-        // Topic configuration:
-        // - Configurable topic name.
-        // - Three partitions.
-        // - One replica.
-        return TopicBuilder.name(topic)
-                .partitions(3)
-                .replicas(1)
-                .build();
+    NewTopic commerceEventsTopic(@Value("${commerce.events.topic:commerce.events}") String topic) { // Configurable topic name.
+        return TopicBuilder.name(topic).partitions(3).replicas(1).build(); // Topic configuration: Configurable topic name, three partitions, one replica.
     }
 }

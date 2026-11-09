@@ -8,47 +8,23 @@ import java.time.Instant;
 
 /**
  * Response DTO representing a return request.
- *
- * This defines which return-related information is exposed
- * through the Commerce Service API.
- *
- * It does not expose the JPA entity directly.
+ * A record is suitable because this DTO carries response data and does not need mutable fields.    
+ * Contains the return request ID, order ID, customer user ID, reason, status and creation time.
  */
 public record ReturnResponse(
-
-        // Unique ID generated for the return request.
-        Long returnId,
-
-        // Order against which the customer requested the return.
-        Long orderId,
-
-        // Customer who created the return request.
-        Long customerUserId,
-
-        // Reason supplied by the customer.
-        String reason,
-
-        // Current return lifecycle status.
-        ReturnStatus status,
-
-        // Time at which the return request was created.
-        Instant createdAt
-
+        Long returnId, // Unique ID generated for the return request.
+        Long orderId, // Order against which the customer requested the return.
+        Long customerUserId, // Customer who created the return request.
+        String reason, // Reason supplied by the customer.
+        ReturnStatus status, // Current return lifecycle status.
+        Instant createdAt // Time at which the return request was created.
 ) {
 
     /**
      * Converts a ReturnRequest entity into a ReturnResponse DTO.
-     *
-     * This is a static factory method.
-     *
-     * It copies the required values from the entity
-     * into the response record.
-     *
-     * Example:
-     * ReturnResponse.from(returnRequest)
+     * Keeping this mapping method here avoids repeating the same entity-to-response conversion in service methods.
      */
     public static ReturnResponse from(ReturnRequest request) {
-
         return new ReturnResponse(
                 request.getReturnId(),
                 request.getOrderId(),

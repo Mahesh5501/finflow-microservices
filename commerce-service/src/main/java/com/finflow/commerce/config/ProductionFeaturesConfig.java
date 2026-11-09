@@ -29,32 +29,22 @@ import javax.sql.DataSource;
 // Enables ShedLock's @SchedulerLock support.
 // The defaults apply when a scheduled job does not specify
 // its own lockAtMostFor and lockAtLeastFor values.
-@EnableSchedulerLock(
-        defaultLockAtMostFor = "10m",
-        defaultLockAtLeastFor = "10s"
-)
+@EnableSchedulerLock(defaultLockAtMostFor = "10m", defaultLockAtLeastFor = "10s")
 public class ProductionFeaturesConfig {
 
     /**
      * Creates the ShedLock LockProvider.
-     *
-     * ShedLock stores lock information in a database table.
-     * This implementation uses the application's DataSource.
+     * ShedLock stores lock information in a database table. This implementation uses the application's DataSource.
      */
     @Bean
     public LockProvider lockProvider(DataSource dataSource) {
 
-        // JdbcTemplate provides convenient JDBC operations.
-        // It uses the same DataSource configured for the application.
+        // JdbcTemplate provides convenient JDBC operations. It uses the same DataSource configured for the application.
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
 
         // Create ShedLock's table if it does not already exist.
-        //
-        // Hibernate creates our JPA entity tables, but it does not
-        // automatically create this ShedLock infrastructure table.
-        //
-        // IF NOT EXISTS prevents an existing table and its lock rows
-        // from being replaced during application restarts.
+        // Hibernate creates our JPA entity tables, but it does not automatically create this ShedLock infrastructure table.
+        // IF NOT EXISTS prevents an existing table and its lock rows from being replaced during application restarts.
         jdbcTemplate.execute("""
                 CREATE TABLE IF NOT EXISTS shedlock (
                     name VARCHAR(64) NOT NULL PRIMARY KEY,
@@ -65,17 +55,9 @@ public class ProductionFeaturesConfig {
                 """);
 
         // Create the JDBC-backed ShedLock provider.
-        return new JdbcTemplateLockProvider(
-                JdbcTemplateLockProvider.Configuration.builder()
-
-                        // Use the JdbcTemplate connected to our database.
-                        .withJdbcTemplate(jdbcTemplate)
-
-                        // Use database time to coordinate locks.
-                        // This avoids relying on potentially different
-                        // application-server clocks.
-                        .usingDbTime()
-
+        return new JdbcTemplateLockProvider(JdbcTemplateLockProvider.Configuration.builder()
+                        .withJdbcTemplate(jdbcTemplate) // Use the JdbcTemplate connected to our database.
+                        .usingDbTime() // Use database time to coordinate locks. This avoids relying on potentially different application-server clocks.
                         .build()
         );
     }
