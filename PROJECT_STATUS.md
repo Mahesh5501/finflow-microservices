@@ -2,6 +2,12 @@
 
 Last assessed: **2026-11-09 (Asia/Calcutta)**.
 
+## Latest progress checkpoint - 2026-11-09 (commerce architecture audit)
+
+- **Last active/affected service:** commerce-service (read-only audit + docs). Wrote `commerce-service/COMMERCE_SERVICE_ARCHITECTURE.md` from CodeGraph/source (placement/settlement/payment/security/jobs/props). No application code refactors in this step. No compile/tests/startup (session restriction preserved).
+- **Top gaps recorded:** payment outbox has no drain worker (`findTop50…` unused); Kafka fire-and-forget; wallet RestClient timeouts/CB fallback weak; refund/cancel compensation incomplete; `ddl-auto=update` + ShedLock CREATE at boot.
+- **Next:** User picks one Critical fix to implement (recommend: wallet timeouts + CB fallback, or outbox reconciler design).
+
 ## Saved session handoff - 2026-11-09 (commerce startup troubleshooting)
 
 - **Last active/affected service:** commerce-service only; prior identity/gateway work preserved. Implemented source fixes are already recorded below: restored CatalogueService repository fields, corrected ShedLock configuration API and JdbcTemplate builder, and added approved automatic CREATE TABLE IF NOT EXISTS initialization before the LockProvider is available. Important files: CatalogueService.java (catalogue persistence dependencies), ProductionFeaturesConfig.java (locking/table initialization), docs/ARCHITECTURE.md and DATABASE_DESIGN.md (startup/table ownership). No new dependencies, SQL/Compose files or business/API changes authored in this session.
