@@ -2,6 +2,16 @@
 
 Last assessed: **2026-11-09 (Asia/Calcutta)**.
 
+## Saved session handoff - 2026-11-09 (commerce startup troubleshooting)
+
+- **Last active/affected service:** commerce-service only; prior identity/gateway work preserved. Implemented source fixes are already recorded below: restored CatalogueService repository fields, corrected ShedLock configuration API and JdbcTemplate builder, and added approved automatic CREATE TABLE IF NOT EXISTS initialization before the LockProvider is available. Important files: CatalogueService.java (catalogue persistence dependencies), ProductionFeaturesConfig.java (locking/table initialization), docs/ARCHITECTURE.md and DATABASE_DESIGN.md (startup/table ownership). No new dependencies, SQL/Compose files or business/API changes authored in this session.
+- **Latest blocker:** user's 09:31 IntelliJ run fails creating WalletPaymentAdapter with java.lang.Error: Unresolved compilation problems / CircuitBreaker import unresolved. Current source import is correct; resilience4j-annotations 2.2.0 JAR contains the type and is present in the pasted launch classpath. Read-only inspection of target/classes/.../WalletPaymentAdapter.class confirmed it contains that unresolved-compilation error placeholder. No extra dependency/source change was justified. This is an invalid compiled artifact; whether IDE dependency indexing or compilation state originally caused it remains unconfirmed.
+- **Resume first:** user reloads Maven projects in IntelliJ, waits for indexing, rebuilds with JDK 21, then runs CommerceServiceApplication. These were instructions only, not actions executed by the agent. If rebuilding fails, inspect the Build output before further changes. Agent must NOT compile, test or start the application until the user explicitly changes that restriction.
+- **Observed runtime evidence:** user's earlier 09:28 run started on port 18083 using Java 21, then scheduled jobs failed because commerce.shedlock was absent. The later run failed before successful startup, so automatic table creation and scheduled-job recovery have NOT been verified. No database inspection or SQL execution by the agent.
+- **Actual checks this session:** CodeGraph/source tracing, local ShedLock dependency source/JAR inspection, POM XML/import/field checks across 91 Java files, IntelliJ configuration comparison across five services, and read-only compiled-class inspection. `mvn -version` showed Java 8 while `java -version` showed 21; per-process JAVA_HOME/PATH selection made `mvn -version` show 21. No global Java change. No compilation, tests, application starts, Docker or SQL executed by the agent. User-supplied failing builds/runs are not agent test results or proof of final correctness.
+- **Remaining separately scoped work:** category-cache authorization on cache hits and CategoryResponse serialization; previously documented payment/replay/concurrency/money concerns. Keep fixes small and understandable. No current commerce test/build success claimed; historical results remain historical.
+- **Save reconciliation:** tracked working tree/index were clean at save start (implementation/documentation may have been committed externally); untracked commerce-service.zip exists and was left untouched. This save changes documentation only, without staging/committing. Next logical task is resolve the invalid compiled adapter and verify startup from user-provided output before adding features.
+
 ## Latest commerce change - 2026-11-09 (automatic ShedLock table initialization)
 
 - User approved automatic creation after their IntelliJ log showed successful startup on port 18083 followed by scheduled-job errors: commerce.shedlock did not exist.
@@ -324,6 +334,7 @@ These summaries reuse the initial assessment; no service was re-analysed or chan
 
 ### commerce-service
 
+- **Resume 2026-11-09:** see Saved session handoff above. Current blocker is an invalid compiled WalletPaymentAdapter containing an unresolved CircuitBreaker import error; source/dependency are present. Await user IDE reload/rebuild/run output; no agent compile/tests/runtime authorized. ShedLock auto-creation is implemented but unverified after the latest startup failure.
 - Latest source-only fixes: see 2026-11-09 checkpoint above. Missing CatalogueService fields and unsupported ShedLock configuration types corrected; current build/startup remains unverified by user instruction.
 - Verified selected H2/simulator paths: catalogue/search, cart checkout, order/payment outcomes, coupon/cancel/fulfilment and maintenance; wallet adapter has three mocked HTTP checks.
 - Partial/blockers: payment recovery/expiry races, replay scope, returns/staff refund authorization, monetary precision and cart retries (R1/R3-R6/R10/R12-R13). Historically 16 tests passed; packaging failed with missing Plexus FileSet.

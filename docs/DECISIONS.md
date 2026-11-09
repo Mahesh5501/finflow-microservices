@@ -70,3 +70,7 @@ Identity uses Lombok only for `@Getter` (entities/`ApiException`) and `@Slf4j`. 
 ## 2026-11-08: Identity rate-limit Redis down → 503
 
 Login/forgot/resend still fail closed when Redis is unreachable (no unlimited attempts). Response is `503 RATE_LIMIT_UNAVAILABLE`, not the security entry-point `401 Valid Bearer access token required`.
+
+## 2026-11-09: Initialize the commerce ShedLock table before scheduled jobs
+
+The user approved automatic table creation after a runtime log showed that Hibernate had not created commerce.shedlock. Keep initialization small and local to ProductionFeaturesConfig.lockProvider: use the existing JdbcTemplate to execute CREATE TABLE IF NOT EXISTS before returning the LockProvider. This avoids a separate SQL file, runner, entity/repository or migration dependency for this task and preserves existing lock rows. The database account requires CREATE permission; failure prevents provider initialization. This does not repair incompatible existing schemas, replace production migration management, or prove successful deployment. No SQL/startup/tests were executed by the agent; the latest user run is blocked by an invalid compiled WalletPaymentAdapter.
