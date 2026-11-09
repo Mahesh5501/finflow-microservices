@@ -36,12 +36,14 @@ public class CommerceMaintenanceJobs {
     }
 
     @Scheduled(fixedDelayString = "${commerce.maintenance.reservation-fixed-delay-ms:60000}")
+    @net.javacrumbs.shedlock.spring.annotation.SchedulerLock(name = "expireReservationsLock", lockAtMostFor = "50s", lockAtLeastFor = "10s")
     public void expireReservations() {
         Instant cutoff = Instant.now().minus(reservationTtlMinutes, ChronoUnit.MINUTES);
         reservationExpiryService.expireStaleReservations(cutoff);
     }
 
     @Scheduled(fixedDelayString = "${commerce.maintenance.cart-fixed-delay-ms:300000}")
+    @net.javacrumbs.shedlock.spring.annotation.SchedulerLock(name = "purgeAbandonedCartsLock", lockAtMostFor = "4m", lockAtLeastFor = "30s")
     public void purgeAbandonedCarts() {
         Instant cutoff = Instant.now().minus(cartAbandonHours, ChronoUnit.HOURS);
         abandonedCartCleanupService.purgeAbandonedCarts(cutoff);

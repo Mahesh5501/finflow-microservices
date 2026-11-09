@@ -8,6 +8,7 @@ import com.finflow.commerce.dto.ProductUpdateRequest;
 import com.finflow.commerce.entity.Category;
 import com.finflow.commerce.entity.Product;
 import com.finflow.commerce.exception.ApiException;
+import com.finflow.commerce.mapper.ProductMapper;
 import com.finflow.commerce.repository.CategoryRepository;
 import com.finflow.commerce.repository.ProductRepository;
 import jakarta.persistence.criteria.Predicate;
@@ -28,13 +29,18 @@ public class CatalogueService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final ProductMapper productMapper;
 
-    public CatalogueService(ProductRepository productRepository, CategoryRepository categoryRepository) {
+    public CatalogueService(ProductRepository productRepository,
+                            CategoryRepository categoryRepository,
+                            ProductMapper productMapper) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
+        this.productMapper = productMapper;
     }
 
     @Transactional
+    @org.springframework.cache.annotation.CacheEvict(value = "categories", key = "#request.organisationId()")
     public CategoryResponse createCategory(List<Long> callerOrgIds, CategoryRequest request) {
         requireOrgAccess(callerOrgIds, request.organisationId());
         String slug = request.slug().trim().toLowerCase();
@@ -46,6 +52,7 @@ public class CatalogueService {
     }
 
     @Transactional(readOnly = true)
+    @org.springframework.cache.annotation.Cacheable(value = "categories", key = "#organisationId")
     public List<CategoryResponse> listCategories(Long organisationId, List<Long> callerOrgIds) {
         requireOrgAccess(callerOrgIds, organisationId);
         return categoryRepository.findByOrganisationIdOrderByNameAsc(organisationId).stream()
@@ -72,7 +79,7 @@ public class CatalogueService {
         requireOrgAccess(callerOrgIds, organisationId);
         Map<Long, String> names = categoryNames(organisationId);
         return productRepository.findByOrganisationIdOrderByProductIdAsc(organisationId).stream()
-                .map(p -> ProductResponse.from(p, names.get(p.getCategoryId())))
+                .map(p -> productMapper.toResponse(p, names.get(p.getCategoryId())))
                 .toList();
     }
 
@@ -118,7 +125,7 @@ public class CatalogueService {
         };
         Map<Long, String> names = categoryNames(organisationId);
         return productRepository.findAll(spec, pageable)
-                .map(p -> ProductResponse.from(p, names.get(p.getCategoryId())));
+                .map(p -> productMapper.toResponse(p, names.get(p.getCategoryId())));
     }
 
     private ProductResponse toResponse(Product product) {
@@ -128,7 +135,7 @@ public class CatalogueService {
                     .map(Category::getName)
                     .orElse(null);
         }
-        return ProductResponse.from(product, categoryName);
+        return productMapper.toResponse(product, categoryName);
     }
 
     private Map<Long, String> categoryNames(Long organisationId) {

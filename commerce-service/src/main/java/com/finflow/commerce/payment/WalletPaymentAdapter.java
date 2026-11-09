@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
@@ -18,6 +19,7 @@ import java.util.Map;
  */
 @Component
 @ConditionalOnProperty(name = "payment.provider", havingValue = "wallet")
+@CircuitBreaker(name = "walletService")
 public class WalletPaymentAdapter implements PaymentPort {
 
     private final RestClient walletRestClient;

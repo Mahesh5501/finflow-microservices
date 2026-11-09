@@ -47,6 +47,10 @@ One wallet per **user**, not per org/currency. No organisation column exists. Hi
 
 Wallet status ACTIVE/BLOCKED/CLOSED; entity enforces active movement, sufficient balance and zero balance to close. Balance is materialized and updated with history, not computed by SUM. This is not a debit/credit account chart or full double-entry ledger. All wallet/user/transfer references here are scalar IDs with no declared ORM FK. Unique nullable history keys allow multiple transfer legs without keys. Sequential idempotency is tested; replay scope and race limitations are in R2/R11 of PROJECT_STATUS.
 
+## Commerce scheduling infrastructure (2026-11-09)
+
+In addition to JPA-mapped business tables, commerce uses `shedlock`: `name VARCHAR(64)` primary key, `lock_until TIMESTAMP(3)`, `locked_at TIMESTAMP(3)`, `locked_by VARCHAR(255)`, all NOT NULL. ProductionFeaturesConfig explicitly creates it if absent before returning the JDBC LockProvider. It has no JPA entity or Spring Data repository and stores job locks, not business records. Existing rows are preserved; an incompatible existing schema is not automatically repaired. This startup initializer is not a versioned schema migration and has not been executed/verified by the agent.
+
 ## Commerce tables
 
 | Table / entity | Primary key | Principal fields and constraints |

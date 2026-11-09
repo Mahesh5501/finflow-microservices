@@ -1,6 +1,36 @@
 # FinFlow project status
 
-Last assessed: **2026-11-08 (Asia/Calcutta)**.
+Last assessed: **2026-11-09 (Asia/Calcutta)**.
+
+## Latest commerce change - 2026-11-09 (automatic ShedLock table initialization)
+
+- User approved automatic creation after their IntelliJ log showed successful startup on port 18083 followed by scheduled-job errors: commerce.shedlock did not exist.
+- ProductionFeaturesConfig.lockProvider now uses its existing JdbcTemplate to execute CREATE TABLE IF NOT EXISTS shedlock before constructing the LockProvider. Columns match ShedLock's JDBC contract: name primary key, lock_until/locked_at TIMESTAMP(3), locked_by. Existing tables/rows are preserved; no entity, repository, dependency, SQL file or Compose file added. Both existing scheduled jobs continue to use this provider.
+- Runtime requirement: the datasource user needs CREATE permission for initialization. Failure to prepare the table fails bean creation rather than allowing recurring missing-table job failures. IF NOT EXISTS does not repair an existing incompatible table; schema migrations/production provisioning remain separate.
+- Verification: inspected the exact edited configuration and initialization order only. No compilation, tests, application startup or SQL executed by the agent, per user restriction. The user's earlier log proves startup before this change, not that this initializer has run.
+- Next: user restarts commerce in IntelliJ and checks whether the scheduled-job errors are resolved. Cache authorization/serialization concerns remain separately pending.
+
+## Latest commerce fix - 2026-11-09 (ShedLock JDBC builder)
+
+- User's IntelliJ compiler error identifies another source API mismatch, separate from the terminal Java-version issue. ShedLock 5.16.0 Configuration.Builder has withJdbcTemplate(JdbcTemplate), not withDataSource(DataSource).
+- Fixed ProductionFeaturesConfig to use withJdbcTemplate(new JdbcTemplate(dataSource)), retaining the existing database and usingDbTime behavior. Confirmed withJdbcTemplate, usingDbTime and build against the actual locally installed dependency source. No dependency, schema or API changes.
+- Verification: source/dependency inspection only; no compilation, tests or startup executed. This corrects the reported missing method; full build/startup is not claimed. Prior cache/schema/runtime concerns remain separate.
+
+## Latest commerce diagnostic - 2026-11-09 (Maven Java mismatch)
+
+- User supplied a failed `mvn clean compile` log: record declarations, instanceof patterns and switch arrows produce parser errors. The inspected source uses valid modern Java syntax; no conversion to old Java is appropriate.
+- **Executed version queries only:** `mvn -version` reports Maven 3.9.16 running on BellSoft Java 1.8.0_492, while `java -version` resolves Temurin 21.0.12.1. Maven's JAVA_HOME and the shell java executable differ. POM release 21 does not upgrade the JVM running Maven. After selecting the already installed Temurin 21 JAVA_HOME/PATH for one process only, `mvn -version` confirms Java 21. No global Java settings changed.
+- **Fix for the user's Git Bash session in commerce-service:** `source ../finflow-env.sh`, then `mvn -version` and confirm Java 21 before any separately authorized build. Existing script already sets the correct installed JDK; no new scripts/plugins/dependencies needed. IntelliJ's saved project SDK is 21, but its Maven Runner/Importer JDK should also be 21. The pasted log is compilation failure, not evidence of a Spring runtime exception.
+- **Limits/next:** No compilation, tests or application execution by the agent. Earlier source-only field/ShedLock fixes remain. This diagnostic does not prove the complete project builds or starts; examine the user's next error only if one remains after Java selection. Other recorded runtime/cache concerns remain separate.
+
+## Latest commerce checkpoint - 2026-11-09 (source-only startup fixes)
+
+- **Active service:** commerce-service; user explicitly requested source analysis/fixes without compilation, tests or application execution. Prior identity work is preserved. Existing commerce implementation covers catalogue, carts, orders/payment, returns and maintenance; historical test results are not current verification.
+- **Fixed:** CatalogueService used productRepository/categoryRepository without declaring their fields; restored both final fields with the existing constructor. ProductionFeaturesConfig referenced ScheduledLockConfiguration/ScheduledLockConfigurationBuilder, absent from the actual local shedlock-spring 5.16.0 JAR; replaced that bean with supported @EnableSchedulerLock using the same 10m/10s defaults. Removed duplicate @EnableScheduling from that config; the main application retains it. Existing dependencies, APIs, payment/business rules and schema unchanged.
+- **Verification:** Read actual startup/config/service/repository sources, ShedLock's local JAR/source annotation and IntelliJ project/run XML. Read-only checks examined 91 main/test Java files for unresolved project imports and constructor assignments lacking explicit fields; no remaining findings in those limited checks. POM parsed as XML. This is not full Java syntax/type validation. No Maven/Gradle, compiler, test, application, Docker or database command was executed.
+- **IntelliJ:** Saved module settings specify temurin-21/JDK_21 and bytecode 21; saved Spring Boot main class/module are correct. The two source errors can prevent the IDE's pre-run build. Exact reported failure is still unknown until the user's console error arrives; startup success is not claimed.
+- **Follow-ups, not modified:** MySQL URL is 127.0.0.1:3307/commerce, port 18083. Existing Redis category cache needs Redis; default serialization is incompatible with non-Serializable CategoryResponse, and org-ID-only cache hits can bypass listCategories' in-method membership check. Existing scheduled locking requires a shedlock table, which has no JPA entity or schema initialization in commerce source. Missing table affects job execution; it is not proven to be the user's startup failure. JWKS is fetched on token use, wallet on payment/refund, and Kafka is disabled by default. No extra SQL/Compose/config files or dependencies introduced.
+- **Next:** Match IntelliJ console's first failure/Caused by against these source fixes and dependencies; then separately agree a small category-cache authorization/serialization fix. Compilation/tests remain prohibited until the user changes that instruction.
 
 ## Latest progress checkpoint - 2026-11-08 (identity rate-limit Redis 503)
 
@@ -294,6 +324,7 @@ These summaries reuse the initial assessment; no service was re-analysed or chan
 
 ### commerce-service
 
+- Latest source-only fixes: see 2026-11-09 checkpoint above. Missing CatalogueService fields and unsupported ShedLock configuration types corrected; current build/startup remains unverified by user instruction.
 - Verified selected H2/simulator paths: catalogue/search, cart checkout, order/payment outcomes, coupon/cancel/fulfilment and maintenance; wallet adapter has three mocked HTTP checks.
 - Partial/blockers: payment recovery/expiry races, replay scope, returns/staff refund authorization, monetary precision and cart retries (R1/R3-R6/R10/R12-R13). Historically 16 tests passed; packaging failed with missing Plexus FileSet.
 - Next: order replay scope/ownership fixes with wallet; packaging restoration separately. No application files changed in setup.

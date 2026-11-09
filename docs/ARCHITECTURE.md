@@ -58,6 +58,10 @@ Deposit/withdraw use a local transaction: owned wallet -> global history-key loo
 
 Wallet lifecycle: ACTIVE <-> BLOCKED; ACTIVE/BLOCKED -> CLOSED only at zero balance; CLOSED cannot reopen. A wallet owner with wallets:write can block/unblock their own wallet. Funding/deposit is a direct API operation, not proof of an external payment received.
 
+### Commerce scheduler initialization (2026-11-09)
+
+ProductionFeaturesConfig creates the ShedLock JDBC table with CREATE TABLE IF NOT EXISTS while constructing its LockProvider, before the maintenance jobs can acquire locks. This is explicit startup DDL, not a JPA entity or migration runner. Existing lock rows are retained; the datasource account requires CREATE permission. Initialization failure prevents startup. Runtime verification of this change is pending; no SQL was executed during implementation.
+
 ### Order placement and payment
 
 1. OrderController -> CommerceService.createOrder -> OrderPlacementService.placePendingOrder (proxied @Transactional).
