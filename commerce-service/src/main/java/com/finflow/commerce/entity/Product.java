@@ -1,19 +1,18 @@
+
 package com.finflow.commerce.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import jakarta.persistence.Version;
+import com.finflow.commerce.exception.ApiException;
+import jakarta.persistence.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 
 @Entity
 @Table(name = "products")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Product {
 
     @Id
@@ -43,76 +42,100 @@ public class Product {
     @Version
     private Long version;
 
-    protected Product() {
-    }
+    public Product(
+            Long organisationId,
+            String name,
+            BigDecimal unitPrice,
+            int availableQuantity,
+            Long categoryId
+    ) {
+        if (organisationId == null || organisationId <= 0) {
+            throw ApiException.badRequest("Organisation ID must be positive");
+        }
 
-    public Product(Long organisationId, String name, BigDecimal unitPrice, int availableQuantity, Long categoryId) {
+        if (name == null || name.isBlank() || name.trim().length() > 200) {
+            throw ApiException.badRequest("Product name must contain 1 to 200 characters");
+        }
+
+        validatePrice(unitPrice);
+
+        if (availableQuantity < 0) {
+            throw ApiException.badRequest("Available quantity cannot be negative");
+        }
+
+        if (categoryId != null && categoryId <= 0) {
+            throw ApiException.badRequest("Category ID must be positive");
+        }
+
         this.organisationId = organisationId;
-        this.name = name;
+        this.name = name.trim();
         this.unitPrice = unitPrice;
         this.availableQuantity = availableQuantity;
         this.categoryId = categoryId;
         this.status = ProductStatus.ACTIVE;
     }
 
-    public Long getProductId() {
-        return productId;
-    }
-
-    public Long getOrganisationId() {
-        return organisationId;
-    }
-
-    public Long getCategoryId() {
-        return categoryId;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public BigDecimal getUnitPrice() {
-        return unitPrice;
-    }
-
-    public int getAvailableQuantity() {
-        return availableQuantity;
-    }
-
-    public ProductStatus getStatus() {
-        return status;
-    }
-
-    public Long getVersion() {
-        return version;
-    }
-
     public void assignCategory(Long categoryId) {
+        if (categoryId == null || categoryId <= 0) {
+            throw ApiException.badRequest("Category ID must be positive");
+        }
+
         this.categoryId = categoryId;
     }
 
-    public void releaseStock(int qty) {
-        this.availableQuantity += qty;
+    public void reserveStock(int quantity) {
+        if (quantity <= 0) {
+            throw ApiException.badRequest("Reservation quantity must be positive");
+        }
+
+        if (status != ProductStatus.ACTIVE) {
+            throw ApiException.conflict(
+                    "PRODUCT_INACTIVE",
+                    "Cannot reserve stock for an inactive product"
+            );
+        }
+
+        if (availableQuantity < quantity) {
+            throw ApiException.conflict(
+                    "INSUFFICIENT_STOCK",
+                    "Insufficient stock available"
+            );
+        }
+
+        this.availableQuantity -= quantity;
     }
 
-    public void reserveStock(int qty) {
-        if (qty <= 0 || availableQuantity < qty) {
-            throw new IllegalStateException("Insufficient stock");
+    public void releaseStock(int quantity) {
+        if (quantity <= 0) {
+            throw ApiException.badRequest("Release quantity must be positive");
         }
-        this.availableQuantity -= qty;
+
+        try {
+            this.availableQuantity = Math.addExact(this.availableQuantity, quantity);
+        } catch (ArithmeticException ex) {
+            throw ApiException.conflict(
+                    "STOCK_OVERFLOW",
+                    "Available stock exceeds the supported quantity"
+            );
+        }
     }
 
     public void updateUnitPrice(BigDecimal unitPrice) {
-        if (unitPrice == null || unitPrice.signum() <= 0) {
-            throw new IllegalArgumentException("Unit price must be positive");
-        }
+        validatePrice(unitPrice);
         this.unitPrice = unitPrice;
     }
 
     public void updateAvailableQuantity(int availableQuantity) {
         if (availableQuantity < 0) {
-            throw new IllegalArgumentException("Available quantity cannot be negative");
+            throw ApiException.badRequest("Available quantity cannot be negative");
         }
+
         this.availableQuantity = availableQuantity;
+    }
+
+    private void validatePrice(BigDecimal unitPrice) {
+        if (unitPrice == null || unitPrice.signum() <= 0) {
+            throw ApiException.badRequest("Unit price must be positive");
+        }
     }
 }

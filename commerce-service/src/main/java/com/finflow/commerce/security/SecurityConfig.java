@@ -1,3 +1,4 @@
+
 package com.finflow.commerce.security;
 
 import org.springframework.context.annotation.Bean;
@@ -10,50 +11,143 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+/**
+ * Defines Spring Security configuration for Commerce Service.
+ *
+ * Configures stateless JWT-based authentication and
+ * permission-based authorisation.
+ */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
+    // Custom filter that extracts and verifies JWT access tokens.
     private final JwtAuthFilter jwtAuthFilter;
 
+    // Constructor injection of the JWT filter.
     public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
     }
 
+    /**
+     * Creates the security filter chain.
+     *
+     * This method defines which requests are public,
+     * which permissions are required, and how security failures
+     * should be returned to API clients.
+     */
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http
+    ) throws Exception {
+
         http
+
+                // Disable CSRF protection.
+                // This application uses stateless Bearer-token authentication
+                // rather than browser-managed session cookies.
                 .csrf(csrf -> csrf.disable())
+
+                // Enable CORS using Spring's configured defaults.
+                // Actual allowed origins/methods depend on CORS configuration.
                 .cors(Customizer.withDefaults())
+
+                // Disable HTTP Basic authentication.
                 .httpBasic(basic -> basic.disable())
+
+                // Disable form-based login.
                 .formLogin(form -> form.disable())
-                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+                // Do not create or use an HTTP session for authentication.
+                // Each request must carry its own access token.
+                .sessionManagement(sm ->
+                        sm.sessionCreationPolicy(
+                                SessionCreationPolicy.STATELESS
+                        )
+                )
+
+                // Define authorisation rules for incoming requests.
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/**").hasAuthority("commerce:read")
-                        .requestMatchers(HttpMethod.POST, "/api/v1/**").hasAuthority("commerce:write")
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/**").hasAuthority("commerce:write")
-                        .requestMatchers(HttpMethod.PATCH, "/api/v1/**").hasAuthority("commerce:write")
-                        .requestMatchers(HttpMethod.DELETE, "/api/v1/**").hasAuthority("commerce:write")
+
+                        // Health and application-info endpoints are public.
+                        .requestMatchers(
+                                "/actuator/health",
+                                "/actuator/info"
+                        ).permitAll()
+
+                        // GET API requests require read permission.
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/**"
+                        ).hasAuthority("commerce:read")
+
+                        // POST API requests require write permission.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/**"
+                        ).hasAuthority("commerce:write")
+
+                        // PUT API requests require write permission.
+                        .requestMatchers(
+                                HttpMethod.PUT,
+                                "/api/v1/**"
+                        ).hasAuthority("commerce:write")
+
+                        // PATCH API requests require write permission.
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/v1/**"
+                        ).hasAuthority("commerce:write")
+
+                        // DELETE API requests require write permission.
+                        .requestMatchers(
+                                HttpMethod.DELETE,
+                                "/api/v1/**"
+                        ).hasAuthority("commerce:write")
+
+                        // Any request not matched above must still be authenticated.
                         .anyRequest().authenticated()
                 )
+
+                // Configure responses for authentication and authorisation failures.
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint((request, response, authException) -> {
-                            response.setStatus(401);
-                            response.setContentType("application/json");
-                            response.getWriter().write(
-                                    "{\"code\":\"UNAUTHORIZED\",\"message\":\"Valid Bearer access token required\"}"
-                            );
-                        })
-                        .accessDeniedHandler((request, response, accessDeniedException) -> {
-                            response.setStatus(403);
-                            response.setContentType("application/json");
-                            response.getWriter().write(
-                                    "{\"code\":\"FORBIDDEN\",\"message\":\"Missing required permission\"}"
-                            );
-                        })
+
+                        // Authentication entry point:
+                        // used when the caller is not authenticated.
+                        .authenticationEntryPoint(
+                                (request, response, authException) -> {
+                                    response.setStatus(401);
+                                    response.setContentType("application/json");
+
+                                    response.getWriter().write(
+                                            "{\"code\":\"UNAUTHORIZED\",\"message\":\"Valid Bearer access token required\"}"
+                                    );
+                                }
+                        )
+
+                        // Access denied handler:
+                        // used when the caller is authenticated
+                        // but lacks the required permission.
+                        .accessDeniedHandler(
+                                (request, response, accessDeniedException) -> {
+                                    response.setStatus(403);
+                                    response.setContentType("application/json");
+
+                                    response.getWriter().write(
+                                            "{\"code\":\"FORBIDDEN\",\"message\":\"Missing required permission\"}"
+                                    );
+                                }
+                        )
                 )
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+
+                // Insert the custom JWT filter before Spring's
+                // UsernamePasswordAuthenticationFilter.
+                .addFilterBefore(
+                        jwtAuthFilter,
+                        UsernamePasswordAuthenticationFilter.class
+                );
+
+        // Build and return the configured security filter chain.
         return http.build();
     }
 }

@@ -1,13 +1,31 @@
+
 package com.finflow.commerce.mapper;
 
 import com.finflow.commerce.dto.ProductResponse;
 import com.finflow.commerce.entity.Product;
 import org.springframework.stereotype.Component;
 
+/**
+ * Converts Product entities into ProductResponse DTOs.
+ *
+ * The mapper keeps entity-to-response conversion out of the service
+ * and controller layers.
+ */
 @Component
 public class ProductMapper {
 
-    public ProductResponse toResponse(Product p, String categoryName) {
+    /**
+     * Converts a Product entity into a ProductResponse.
+     *
+     * @param p            Product entity loaded from the database.
+     * @param categoryName Name of the product's category.
+     * @return ProductResponse containing the API-facing product data.
+     */
+    public ProductResponse toResponse(
+            Product p,
+            String categoryName
+    ) {
+
         return new ProductResponse(
                 p.getProductId(),
                 p.getOrganisationId(),

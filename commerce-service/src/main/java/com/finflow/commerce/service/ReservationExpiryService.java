@@ -21,13 +21,21 @@ import java.util.EnumSet;
 import java.util.List;
 
 /**
- * Releases stock for unpaid orders past the reservation TTL (PENDING_PAYMENT / ACTION_REQUIRED).
+ * Releases stock for unpaid orders that have exceeded their reservation TTL.
+ *
+ * Eligible orders:
+ * PENDING_PAYMENT
+ * ACTION_REQUIRED
  */
 @Service
 public class ReservationExpiryService {
 
-    private static final Logger log = LoggerFactory.getLogger(ReservationExpiryService.class);
+    // Logger for recording the result of scheduled expiry processing.
+    private static final Logger log =
+            LoggerFactory.getLogger(ReservationExpiryService.class);
 
+    // Only these statuses represent orders that can still hold
+    // an unpaid stock reservation.
     private static final EnumSet<OrderStatus> RESERVING = EnumSet.of(
             OrderStatus.PENDING_PAYMENT,
             OrderStatus.ACTION_REQUIRED
@@ -50,37 +58,89 @@ public class ReservationExpiryService {
         this.eventPublisher = eventPublisher;
     }
 
-    /** @return number of orders expired */
+    /**
+     * Finds and expires unpaid orders created before the supplied cutoff.
+     *
+     * @return number of orders processed as expired
+     */
     @Transactional
     public int expireStaleReservations(Instant cutoff) {
-        List<CommerceOrder> stale = orderRepository.findByStatusInAndCreatedAtBefore(RESERVING, cutoff);
+
+        // Find orders whose status indicates an active payment reservation
+        // and whose creation time is older than the cutoff.
+        List<CommerceOrder> stale =
+                orderRepository.findByStatusInAndCreatedAtBefore(
+                        RESERVING,
+                        cutoff
+                );
+
         int count = 0;
+
+        // Process each stale order.
         for (CommerceOrder order : stale) {
             expireOne(order);
             count++;
         }
+
+        // Log only when at least one order was expired.
         if (count > 0) {
-            log.info("Expired {} unpaid order reservation(s) older than {}", count, cutoff);
+            log.info(
+                    "Expired {} unpaid order reservation(s) older than {}",
+                    count,
+                    cutoff
+            );
         }
+
         return count;
     }
 
+    /**
+     * Expires one order and releases its reserved stock.
+     *
+     * This method runs inside the transaction opened by
+     * expireStaleReservations().
+     */
     private void expireOne(CommerceOrder order) {
+
+        // Restore the stock reserved for every order item.
         for (OrderItem item : order.getItems()) {
+
             Product product = productRepository.findById(item.getProductId())
-                    .orElseThrow(() -> ApiException.notFound("PRODUCT_NOT_FOUND", "Product missing during expiry"));
+                    .orElseThrow(() -> ApiException.notFound(
+                            "PRODUCT_NOT_FOUND",
+                            "Product missing during expiry"
+                    ));
+
             product.releaseStock(item.getQuantity());
         }
+
+        // Change the order state to EXPIRED.
         order.transitionTo(OrderStatus.EXPIRED);
+
+        // Persist the order status change.
         orderRepository.save(order);
 
-        outboxRepository.findByOrderId(order.getOrderId()).ifPresent(outbox -> {
-            if (outbox.getStatus() != com.finflow.commerce.entity.OutboxStatus.DONE) {
-                outbox.markFailed("RESERVATION_TTL_EXPIRED");
-                outboxRepository.save(outbox);
-            }
-        });
+        // Find the payment outbox record, if one exists.
+        outboxRepository.findByOrderId(order.getOrderId())
+                .ifPresent(outbox -> {
 
-        eventPublisher.publish(CommerceEvents.of(order, CommerceEventType.ORDER_EXPIRED));
+                    // A completed payment operation must not be overwritten.
+                    if (outbox.getStatus()
+                            != com.finflow.commerce.entity.OutboxStatus.DONE) {
+
+                        // Mark the payment operation as failed because
+                        // the reservation expired.
+                        outbox.markFailed("RESERVATION_TTL_EXPIRED");
+
+                        outboxRepository.save(outbox);
+                    }
+                });
+
+        // Notify consumers that this order expired.
+        // Note: this publication currently happens before the surrounding
+        // database transaction commits.
+        eventPublisher.publish(
+                CommerceEvents.of(order, CommerceEventType.ORDER_EXPIRED)
+        );
     }
 }

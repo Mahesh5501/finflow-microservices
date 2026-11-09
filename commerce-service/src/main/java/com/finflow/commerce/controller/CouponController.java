@@ -1,3 +1,4 @@
+
 package com.finflow.commerce.controller;
 
 import com.finflow.commerce.dto.CouponRequest;
@@ -13,6 +14,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * REST controller responsible for coupon creation.
+ *
+ * The actual coupon validation, organisation access checks
+ * and persistence are handled by CommerceService.
+ */
 @RestController
 @RequestMapping("/api/v1/coupons")
 public class CouponController {
@@ -23,10 +30,29 @@ public class CouponController {
         this.commerceService = commerceService;
     }
 
+    /**
+     * POST /api/v1/coupons
+     *
+     * Creates a coupon for one of the caller's organisations.
+     *
+     * @Valid validates the incoming CouponRequest.
+     * HTTP 201 indicates successful resource creation.
+     */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public CouponResponse create(@Valid @RequestBody CouponRequest request, Authentication authentication) {
-        AuthenticatedUser user = (AuthenticatedUser) authentication.getPrincipal();
-        return commerceService.createCoupon(user.orgIds(), request);
+    public CouponResponse create(
+            @Valid @RequestBody CouponRequest request,
+            Authentication authentication
+    ) {
+
+        // Extract the authenticated user and their organisation memberships.
+        AuthenticatedUser user =
+                (AuthenticatedUser) authentication.getPrincipal();
+
+        // Delegate coupon creation to the service.
+        return commerceService.createCoupon(
+                user.orgIds(),
+                request
+        );
     }
 }

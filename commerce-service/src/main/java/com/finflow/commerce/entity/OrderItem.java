@@ -1,3 +1,4 @@
+
 package com.finflow.commerce.entity;
 
 import jakarta.persistence.Column;
@@ -9,11 +10,16 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 
 @Entity
 @Table(name = "order_items")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class OrderItem {
 
     @Id
@@ -23,6 +29,7 @@ public class OrderItem {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "order_id", nullable = false)
+    @Getter(AccessLevel.NONE)
     private CommerceOrder order;
 
     @Column(name = "product_id", nullable = false)
@@ -37,41 +44,56 @@ public class OrderItem {
     @Column(nullable = false)
     private int quantity;
 
-    protected OrderItem() {
-    }
+    public OrderItem(
+            Long productId,
+            String productNameSnapshot,
+            BigDecimal unitPriceSnapshot,
+            int quantity
+    ) {
+        validate(productId, productNameSnapshot, unitPriceSnapshot, quantity);
 
-    public OrderItem(Long productId, String productNameSnapshot, BigDecimal unitPriceSnapshot, int quantity) {
         this.productId = productId;
-        this.productNameSnapshot = productNameSnapshot;
+        this.productNameSnapshot = productNameSnapshot.trim();
         this.unitPriceSnapshot = unitPriceSnapshot;
         this.quantity = quantity;
     }
 
+    private void validate(
+            Long productId,
+            String productNameSnapshot,
+            BigDecimal unitPriceSnapshot,
+            int quantity
+    ) {
+        if (productId == null || productId <= 0) {
+            throw new IllegalArgumentException("Product ID must be positive");
+        }
+
+        if (productNameSnapshot == null || productNameSnapshot.isBlank()) {
+            throw new IllegalArgumentException("Product name cannot be blank");
+        }
+
+        if (productNameSnapshot.trim().length() > 200) {
+            throw new IllegalArgumentException("Product name cannot exceed 200 characters");
+        }
+
+        if (unitPriceSnapshot == null || unitPriceSnapshot.signum() < 0) {
+            throw new IllegalArgumentException("Unit price cannot be null or negative");
+        }
+
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Quantity must be greater than zero");
+        }
+    }
+
     void setOrder(CommerceOrder order) {
+        if (order == null) {
+            throw new IllegalArgumentException("Order cannot be null");
+        }
+
         this.order = order;
     }
 
     public BigDecimal lineTotal() {
         return unitPriceSnapshot.multiply(BigDecimal.valueOf(quantity));
-    }
-
-    public Long getOrderItemId() {
-        return orderItemId;
-    }
-
-    public Long getProductId() {
-        return productId;
-    }
-
-    public String getProductNameSnapshot() {
-        return productNameSnapshot;
-    }
-
-    public BigDecimal getUnitPriceSnapshot() {
-        return unitPriceSnapshot;
-    }
-
-    public int getQuantity() {
-        return quantity;
     }
 }
