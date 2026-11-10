@@ -1,279 +1,273 @@
-# Commerce Service — Architecture & API Lifecycle
+# Commerce Service — Architecture & Production Runbook
 
-**Scope:** `commerce-service` as implemented in this FinFlow workspace (Java 21, Spring Boot 3.5.6).  
-**Assessment basis:** Source inspection + CodeGraph (2026-11-09). Not a claim of production certification. Runtime/tests were not executed in this audit pass.  
-**Related docs:** [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md), [docs/SERVICE_DEPENDENCIES.md](../docs/SERVICE_DEPENDENCIES.md), [docs/commerce-service-13-class-retrospective.md](docs/commerce-service-13-class-retrospective.md).
-
----
-
-## 1. Domain boundary
-
-Commerce owns **catalogue, carts, coupons, orders, stock reservation, payment orchestration intent, returns, and commerce domain events**.
-
-| Owns | Does not own |
-|------|----------------|
-| Products, categories, stock quantity | User identity / JWT issuance |
-| Carts, coupons, orders, order items | Wallet balances / ledger |
-| Payment outbox rows (local intent) | Cross-service 2PC |
-| Return requests | Notification delivery |
-| Optional Kafka publish of order events | Shared DB with wallet/identity |
-
-**Money movement** goes through `PaymentPort` → `WalletPaymentAdapter` (HTTP + caller JWT) or `SimulatedPaymentAdapter` (tests/local).
-
-**Port:** `18083` · **Schema:** MySQL `commerce` · **Auth:** RS256 JWT verified via Identity JWKS · **Permissions:** `commerce:read` / `commerce:write`.
+**Service:** `commerce-service` · **Java 21** · **Spring Boot 3.5.6** · **Port 18083**  
+**Last updated:** 2026-11-10 (package-by-feature restructure + production hardening)
 
 ---
 
-## 2. High-level runtime view
+## 1. Directory tree (authoritative)
 
-```mermaid
-flowchart TB
-  Client[Client / Gateway] --> Ctrl[Controllers]
-  Ctrl --> Sec[JwtAuthFilter + SecurityConfig]
-  Sec --> Svc[Services]
-  Svc --> Ent[(JPA entities / MySQL)]
-  Svc --> Pay[PaymentPort]
-  Pay -->|payment.provider=wallet| WalletHTTP[Wallet HTTP]
-  Pay -->|simulated| Sim[SimulatedPaymentAdapter]
-  Svc --> Ev[CommerceEventPublisher]
-  Ev -->|kafka-enabled=false| LogPub[Logging publisher]
-  Ev -->|kafka-enabled=true| Kafka[Kafka commerce.events]
-  Jobs[CommerceMaintenanceJobs + ShedLock] --> Svc
-  Cache[Spring Cache + Redis] --> Cat[CatalogueService]
-```
-
----
-
-## 3. Package map (current = package-by-layer)
+**Style:** classic Spring **layers** at the top, **feature subpackages** underneath (cart, order, catalogue, coupon, returns).
 
 ```
 com.finflow.commerce
-├── controller/     HTTP adapters
-├── service/        use-case orchestration
-├── entity/         JPA aggregate roots + value types
-├── repository/     Spring Data
-├── dto/            request/response records
-├── payment/        PaymentPort + adapters
-├── event/          publisher SPI + Kafka/logging impls
-├── security/       JWT filter, JWKS cache, SecurityConfig
-├── config/         cache, ShedLock, transactions, payment RestClient
-├── job/            scheduled maintenance entrypoints
-├── mapper/         product mapping helpers
-└── exception/      ApiException + advice
+├── CommerceServiceApplication.java
+│
+├── controller/                       # REST — two audiences only
+│   ├── customer/   browse + cart + orders + return request
+│   └── merchant/   catalogue writes, coupons, fulfilment, return approval
+│
+├── service/
+│   ├── catalogue/   CatalogueService, ProductMapper
+│   ├── cart/        CartService, AbandonedCartCleanupService
+│   ├── order/       CommerceService, OrderPlacementService, PaymentSettlementService, …
+│   └── returns/     ReturnService
+│
+├── entity/                           # JPA + enums (per feature)
+│   ├── catalogue/   Product, Category, ProductStatus
+│   ├── cart/        Cart, CartItem
+│   ├── coupon/      Coupon
+│   ├── order/       CommerceOrder, PaymentOutbox, …
+│   └── returns/     ReturnRequest, ReturnStatus
+│
+├── repository/
+│   ├── catalogue/   ProductRepository, CategoryRepository
+│   ├── cart/        CartRepository
+│   ├── coupon/      CouponRepository
+│   ├── order/       CommerceOrderRepository, …
+│   └── returns/     ReturnRequestRepository
+│
+├── dto/
+│   ├── catalogue/   ProductRequest, ProductResponse, …
+│   ├── cart/        CartResponse, CartItemRequest, …
+│   ├── coupon/
+│   ├── order/
+│   └── returns/
+│
+├── integration/        payment/, event/   (wallet & Kafka adapters)
+├── config/             TransactionConfig, ProductionFeaturesConfig (ShedLock when jobs are enabled)
+├── health/             dependency health HTTP API
+├── exception/          ApiException, ErrorResponse, GlobalExceptionHandler
+├── controller/         customer + merchant REST (`@AuthenticationPrincipal AuthenticatedUser`)
+└── security/           JWT (`SecurityConfig`, `JwtAuthFilter`, `AuthenticatedUser`, …)
 ```
 
-### Recommended evolution (package-by-feature, incremental)
+**Optional next step (merchant vs customer):** add a level under `controller` only, e.g. `controller/customer/cart/CartController` and `controller/merchant/catalogue/ProductController`, **same** `service` / `entity` / `repository` / `dto` packages. Split controllers when URLs or permissions differ.
 
-Do **not** big-bang rename. Prefer extracting modules when a vertical grows:
+| Layer | Package example | Role |
+|-------|-----------------|------|
+| Controller | `controller.OrderController` | HTTP only |
+| Service | `service.order.CommerceService` | `@Transactional` use cases |
+| Entity | `entity.order.CommerceOrder` | Persistence model |
+| Repository | `repository.order.CommerceOrderRepository` | Spring Data |
+| DTO | `dto.order.CreateOrderRequest` | API contracts |
 
-| Feature package | Move first |
-|-----------------|------------|
-| `catalogue` | Product/Category controller+service+entity |
-| `cart` | Cart* |
-| `order` | Order* + Placement + Settlement + Cancel + Expiry |
-| `payment` | already isolated port/adapters |
-| `returns` | Return* |
-| `shared` | security, ApiException, config |
-
-Keep `PaymentPort` as the only wallet seam (AGENTS: do not add a second competing payment path).
+Migration script: `scripts/migrate-to-layered-subpackages.py`.
 
 ---
 
-## 4. Critical API lifecycles
+## 2. Domain boundary (unchanged contract)
 
-### 4.1 Create order (direct checkout)
+Commerce owns catalogue, carts, coupons, orders, stock reservation, payment **intent** (outbox), returns, and domain events. Wallet balances and JWT issuance remain external.
 
-**Entry:** `POST /api/v1/orders` + header `Idempotency-Key`  
-**Orchestrator:** `CommerceService.createOrder`
+**Payment seam:** single `PaymentPort` → `WalletPaymentAdapter` (HTTP + caller JWT) or `SimulatedPaymentAdapter`.
 
-```mermaid
-sequenceDiagram
-  participant C as OrderController
-  participant CS as CommerceService
-  participant OP as OrderPlacementService
-  participant DB as MySQL
-  participant PS as PaymentSettlementService
-  participant WP as PaymentPort
-  participant Ev as EventPublisher
+### Marketplace model (Flipkart / Amazon style)
 
-  C->>CS: createOrder(user, orgs, idemKey, JWT, body)
-  CS->>OP: placePendingOrder(...)
-  Note over OP,DB: @Transactional
-  OP->>DB: validate org, idempotency, reserve stock (@Version)
-  OP->>DB: save Order PENDING_PAYMENT + IdempotencyRecord + PaymentOutbox
-  OP-->>CS: orderId
-  Note over CS,WP: wallet HTTP outside placement TX
-  CS->>PS: settleCharge(orderId, accessToken)
-  PS->>WP: charge(commerce-pay-{orderId})
-  WP-->>PS: APPROVED / DECLINED / UNCERTAIN
-  PS->>DB: short TX applyChargeResult
-  alt APPROVED
-    PS->>Ev: ORDER_PAID
-  end
-  PS-->>C: OrderResponse
-```
+| Role | API contract |
+|------|----------------|
+| **Customer** | Global catalogue: `GET /api/v1/customer/products/search`, `GET .../products/{id}`. Cart: `{ "productId", "quantity" }` — seller id is read from the product row. Orders: list by **your user id**, not org membership. |
+| **Merchant** | Org-scoped writes under `/api/v1/merchant/**` with `organisationId` (seller) on create/update. |
 
-**Guarantees that exist today**
-
-- Placement + stock + idempotency + payment_outbox row share one DB transaction.
-- Wallet charge is **outside** that transaction (correct boundary).
-- Product stock uses `@Version`; conflicts map to retryable API errors in advice.
-- Order status changes go through `OrderStatus.canTransitionTo` via `CommerceOrder.transitionTo`.
-
-**Guarantees that do not exist today**
-
-- No worker drains `PaymentOutbox` via `findTop50ByStatus…` (query is unused). Settlement is synchronous after placement / `/pay`.
-- Domain Kafka events are fire-and-forget (`KafkaTemplate.send` without ack handling); logging publisher is default.
-- No durable **domain-event** outbox for ORDER_PAID / CANCELLED / FULFILLED.
-
-### 4.2 Pay existing order
-
-**Entry:** customer-only pay endpoint → `CommerceService.payOrder` → `settleCharge`  
-Allowed statuses: `PENDING_PAYMENT`, `ACTION_REQUIRED`.  
-Idempotent wallet key remains `commerce-pay-{orderId}`.
-
-### 4.3 Cancel
-
-**Entry:** `CommerceService.cancelOrder`
-
-1. Org + customer checks; status ∈ `{CREATED, PENDING_PAYMENT, ACTION_REQUIRED, CONFIRMED}`.
-2. If `CONFIRMED` → `settleRefund` (HTTP) **then** `OrderCancelService.finalizeCancel` (TX: release stock unless `PAYMENT_FAILED`, status `CANCELLED`, publish `ORDER_CANCELLED`).
-3. No persisted refund-outbox bridging “refund succeeded / cancel failed” races.
-
-### 4.4 Fulfilment
-
-- Start: `CONFIRMED` → `FULFILMENT_PENDING`.
-- Complete: `FULFILMENT_PENDING` or `CONFIRMED` → `FULFILLED` + `ORDER_FULFILLED` event.
-
-### 4.5 Returns
-
-`ReturnService`: request (FULFILLED only) → approve/reject → complete (refund via `PaymentSettlementService` outside TX, then stock restore + event in short TX).
-
-### 4.6 Maintenance jobs
-
-`CommerceMaintenanceJobs` (ShedLock):
-
-| Job | Default | Effect |
-|-----|---------|--------|
-| expireReservations | every 60s after previous | Unpaid stale → `EXPIRED`, stock release, outbox mark failed |
-| purgeAbandonedCarts | every 5m | Delete carts older than TTL |
-
-ShedLock table is created at LockProvider bean init (`CREATE TABLE IF NOT EXISTS shedlock`).
+Checkout still creates **one order per seller** (same as one fulfilment batch). Multi-seller cart is merged in `GET /api/v1/customer/carts`; pass `sellerOrganisationId` on checkout when needed.
 
 ---
 
-## 5. Consistency & concurrency model
+## 3. API map (by feature)
 
-| Concern | Mechanism | Limit |
-|---------|-----------|--------|
-| Stock | `Product.@Version` + domain `reserveStock`/`releaseStock` | Optimistic only; high contention → retries |
-| Cart | `Cart.@Version` | Concurrent cart edits vs checkout still weakly coordinated |
-| Checkout idempotency | `IdempotencyRecord` + request hash | Global key namespace; no TTL/cleanup job |
-| Wallet charge/refund | HTTP `Idempotency-Key` | Relies on wallet semantics |
-| Payment ambiguity | `UNCERTAIN` → `ACTION_REQUIRED`, stock kept | Manual `/pay` or ops; no auto reconciler |
-| Multi-instance jobs | ShedLock JDBC | Needs shared DB clock (`usingDbTime`) |
-| Order FSM | `OrderStatus.canTransitionTo` | Enforced in entity |
+| Area | Base path | Controller |
+|------|-----------|------------|
+| Catalogue | `/api/v1/products`, `/api/v1/categories` | `catalogue.api.*` |
+| Cart | `/api/v1/carts/**` | `cart.api.CartController` |
+| Coupons | `/api/v1/coupons` | `coupon.api.CouponController` |
+| Orders | `/api/v1/orders/**` | `order.api.OrderController` |
+| Returns | `/api/v1/returns/**` | `returns.api.ReturnController` |
+| **Dependency health** | `GET /api/v1/health/dependencies` | `health` (public) |
+
+**Note:** The IntegratedSlots monitor path `/IntegratedSlots/healthcheck/monitor` belongs to the **gaming servlet** stack (`integratedslotsv2`), not FinFlow commerce. Commerce exposes **dependency-only** health at `/api/v1/health/dependencies`. JVM/process metrics stay on Actuator (`/actuator/metrics`, `/actuator/prometheus`).
 
 ---
 
-## 6. Production-readiness pillars (current vs gap)
+## 4. Critical lifecycle (create order)
 
-### Resiliency
+Unchanged semantics; orchestration now lives under `order.application`:
 
-| Present | Missing / weak |
-|---------|----------------|
-| Resilience4j CB annotation on `WalletPaymentAdapter` | No `@CircuitBreaker` fallback method observed; open breaker behavior depends on R4j defaults |
-| Outcome mapping DECLINED vs UNCERTAIN | No explicit RestClient connect/read timeouts in reviewed adapter |
-| | No Retry/TimeLimiter/Bulkhead beans configured for wallet |
-| | Kafka send ignores completion / no DLT |
+1. `OrderController` → `CommerceService.createOrder`
+2. `OrderPlacementService.placePendingOrder` — single TX: stock (`@Version`), idempotency, outbox `PENDING`
+3. `PaymentSettlementService.settleCharge` — wallet HTTP **outside** placement TX
+4. `PaymentPort.charge` — Resilience4j **circuit breaker + retry**, RestClient **3s connect / 10s read**
+5. Short TX apply outcome → event publish on success
+
+---
+
+## 5. Production hardening checklist
+
+### Resilience
+
+- [x] Resilience4j CB on `WalletPaymentAdapter` (`walletService` instance)
+- [x] Resilience4j retry with exponential backoff (`application.properties`)
+- [x] RestClient timeouts in `integration.payment.PaymentConfig`
+- [ ] Outbox drain worker (rows written; no reconciler yet — see prior audit)
+
+### Consistency
+
+- [x] Idempotency keys on order create (header) and wallet charge/refund keys
+- [x] Optimistic locking on product stock (`CONCURRENT_UPDATE` via `GlobalExceptionHandler`)
+- [x] Payment settlement outside placement transaction
 
 ### Observability
 
-| Present | Missing / weak |
-|---------|----------------|
-| Actuator health/info/metrics/prometheus | Health may be DOWN when Redis unavailable (cache) |
-| micrometer-tracing-bridge-otel + OTLP deps | Exporter endpoint/sampling not fully proven in props |
-| | Structured JSON logging not standardized service-wide |
-| | No custom business metrics (orders_confirmed, payment_uncertain) |
+- [ ] `TraceIdFilter` (optional) — `X-Trace-Id` + MDC `traceId`; removed for now
+- [x] `ErrorResponse` — `code`, `message`, `timestamp`, `traceId`, optional `details`
+- [x] Micrometer OTel bridge on classpath (export when collector configured)
+- [x] Log pattern includes `%X{traceId}`
+
+### Health
+
+- [x] `GET /api/v1/health/dependencies` — database, Redis, identity JWKS, wallet (or `SKIPPED` if simulated payment)
+- [x] Actuator liveness/readiness probes enabled
+- [x] Actuator remains separate from dependency monitor (no heap/GC in `/api/v1/health/dependencies`)
 
 ### Security
 
-| Present | Missing / weak |
-|---------|----------------|
-| Stateless JWT + JWKS cache | Prometheus/metrics exposure — confirm edge filtering |
-| Method-family permission gates | Org membership is claim-based; JWT permission union limitations apply (see root AGENTS) |
-| Caller JWT forwarded to wallet | Staff refund vs wallet ownership remains a known product gap |
-| | Secrets in `application.properties` (local root/root) — env-only for real deploys |
-
-### Data / config
-
-| Present | Missing / weak |
-|---------|----------------|
-| Explicit payment TX split | `ddl-auto=update` unsuitable for production |
-| Payment outbox **row** written with order | No outbox **processor**; naming implies pattern that is incomplete |
-| | Flyway/Liquibase absent |
-| | Fail-fast validation for `wallet.base-url` / JWKS URL incomplete |
+- [x] Stateless JWT via identity JWKS
+- [x] `commerce:read` / `commerce:write` on `/api/v1/**` (except public health)
 
 ---
 
-## 7. Controllers → capabilities
+## 6. Local runbook
 
-| Controller | Primary flows |
-|------------|---------------|
-| `ProductController` / `CategoryController` | Catalogue CRUD/list (cached where annotated) |
-| `CouponController` | Create coupon |
-| `CartController` | Cart mutate + checkout (idempotent) |
-| `OrderController` | Create/list/get/pay/cancel/fulfil |
-| `ReturnController` | Request/approve/reject/complete |
-
-All `/api/v1/**` require auth + `commerce:read|write` by HTTP method.
+1. **Java 21:** `source ../finflow-env.sh` then `mvn -version`
+2. **Infra:** MySQL `commerce` on `3307`, Redis `6379`, identity `18081`, wallet `18082` when `payment.provider=wallet`
+3. **Start:** `mvn spring-boot:run` or IDE `CommerceServiceApplication`
+4. **Smoke**
+   - `GET http://localhost:18083/api/v1/health/dependencies` → `UP` when deps healthy
+   - `GET http://localhost:18083/actuator/health` → includes probe groups
+5. **Scheduled jobs (optional):** reservation expiry / cart purge — not wired for now; `ReservationExpiryService` and `AbandonedCartCleanupService` remain callable when you add a scheduler back.
 
 ---
 
-## 8. Operational runbook (local / learning)
+## 7. Verification (this change set)
 
-1. Infra: `docker compose up -d` (MySQL `:3307`, Redis `:6379`; Kafka only if events enabled).
-2. Start Identity (`18081`) → Wallet (`18082`) → Commerce (`18083`) under **Java 21** (`source finflow-env.sh`).
-3. Login → ensure JWT contains org + `commerce:*` (re-login after org create).
-4. Set `payment.provider=wallet` (current main props) or `simulated` for offline.
-5. If ShedLock errors: confirm `shedlock` table / CREATE privilege (initializer in `ProductionFeaturesConfig`).
-6. If Redis down: expect cache/health issues; fix Redis before relying on catalogue cache.
-7. Uncertain payments: inspect order `ACTION_REQUIRED`, retry `/pay` with same customer JWT; reconcile wallet side manually if needed.
+| Check | Result |
+|-------|--------|
+| `mvn -DskipTests compile` (Java 21) | **Passed** (2026-11-10) |
+| Unit/integration tests | Not run — execute after confirmation per project policy |
 
-### Deployment checklist (production target)
-
-- [ ] Replace `ddl-auto=update` with migrations + reviewed schema
-- [ ] Provision JWKS URL, wallet base URL, Redis, Kafka via secrets/env
-- [ ] Restrict actuator; scrape metrics privately
-- [ ] Configure RestClient timeouts + CB fallback + alert on open circuit
-- [ ] Implement payment/domain outbox workers **or** rename/document sync-only settlement
-- [ ] Define ACTION_REQUIRED reconciliation SLO
-- [ ] Multi-instance ShedLock verified against shared MySQL
-- [ ] Load-test stock contention and idempotent checkout
+**Suggested test scope after approval:**  
+`mvn -B -Dtest=WalletPaymentAdapterTest,CatalogueServiceTest,ReservationExpiryServiceTest,CommerceServiceTest,CartServiceTest test`
 
 ---
 
-## 9. Intentionally good patterns (keep)
+## 8. Package naming (`entity` subpackages)
 
-1. **PaymentPort** seam with conditional adapters — single payment path.
-2. **Wallet HTTP outside placement transaction** — avoids holding DB locks during remote I/O.
-3. **Order status transition graph** on the enum/entity — not a free-form setter.
-4. **Stock and money as domain methods** with `BigDecimal` scale 4 on commerce amounts.
-5. **Idempotency-Key** on checkout + stable wallet keys `commerce-pay-*` / `commerce-refund-*`.
-6. **ShedLock** for multi-instance maintenance jobs.
+JPA types live under **`entity.{feature}`** (e.g. `entity.order.CommerceOrder`), not a single flat `entity/` folder. That matches your preferred **layer + subpackage** style and keeps cart/order/coupon types easy to find.
 
 ---
 
-## 10. Suggested next engineering tasks (priority order)
+## 9. Splitting APIs: customer vs merchant (suggestion)
 
-1. **Critical:** Either implement a payment-outbox drain/reconciler for `PENDING`/`PROCESSING`/`UNCERTAIN`, or document+rename so “outbox” is not mistaken for async reliability.
-2. **Critical:** RestClient timeouts + circuit-breaker fallback returning `PaymentResult.uncertain(...)`.
-3. **High:** Durable domain-event publishing (outbox or transactional sync with retry) before depending on Kafka consumers.
-4. **High:** Refund/cancel compensation state machine (persist refund intent).
-5. **Medium:** Idempotency record TTL cleanup; cart-checkout concurrency hardening.
-6. **Medium:** Replace startup `CREATE TABLE` / `ddl-auto` with migrations.
-7. **Low:** Incremental package-by-feature moves; trim verbose comments when learning goals are met.
+Today FinFlow uses **one** JWT surface (`commerce:read` / `commerce:write`) and **org scoping** in services (`organisationId`, `mineOnly`, membership checks). That is valid for an MVP.
+
+For clearer boundaries (gateway routes, OpenAPI, audits, rate limits), split **adapters** without duplicating business logic:
+
+**Recommended audience subpackages (only when you split APIs)** — use industry-neutral names:
+
+| Subpackage | Who | Examples in commerce |
+|------------|-----|----------------------|
+| `controller.customer` | Logged-in shopper (B2C) | Cart, checkout, own orders, return request |
+| `controller.merchant` | Org staff / seller (B2B ops) | Product CRUD, coupons, fulfilment, approve return |
+| (removed) | Catalogue browse lives under `controller.customer` | `GET /api/v1/customer/products` |
+
+Avoid vague names like `user` vs `admin` unless identity service already uses them. FinFlow JWT today uses `commerce:read` / `commerce:write`; merchant/customer folders prepare for finer permissions later.
+
+Flat layout today (no audience split):
+
+```
+com.finflow.commerce.controller.CartController
+com.finflow.commerce.controller.OrderController
+…
+```
+
+After split (same URLs possible; class names must differ):
+
+```
+com.finflow.commerce.controller.customer.CartController
+com.finflow.commerce.controller.merchant.ProductController
+```
+
+`service`, `entity`, `repository`, and `dto` stay in **feature** subpackages only (`service.cart`, …)—never duplicate per audience.
+
+**Suggested mapping from current endpoints**
+
+| Audience | Current endpoints (examples) | Future prefix (optional) |
+|----------|------------------------------|---------------------------|
+| **Customer** | Cart CRUD, checkout, create/cancel/pay **own** order, request return | `/api/v1/customer/...` |
+| **Merchant** | Product/category PATCH/POST, coupons, `mineOnly=false` orders, fulfilment, approve/reject/complete return | `/api/v1/merchant/...` |
+| **Customer read** | Product list/search, category list | `/api/v1/customer/products`, `/api/v1/customer/categories` |
+
+**Implementation rules**
+
+1. **Controllers stay thin** — both call the same `application` services (`CartService`, `CatalogueService`, etc.).
+2. **Authorize in one place** — add permissions later, e.g. `commerce:merchant:write` vs `commerce:shopper:write`, or keep org checks in services until identity grows.
+3. **Do not** split by controller alone without URL or permission differences — that is folder noise.
+
+Gateway (api-gateway) can route `/api/v1/merchant/**` to stricter policies and `/api/v1/customer/**` to public/mobile clients.
 
 ---
 
-*Generated for FinFlow learning/audit. Prefer this file for commerce lifecycle; keep root `docs/ARCHITECTURE.md` as the cross-service map.*
+## 10. Design patterns & SOLID (honest scorecard)
+
+**Applied (substantially)**
+
+| Pattern / principle | Where |
+|---------------------|--------|
+| **Hexagonal ports** | `PaymentPort` + wallet/simulated adapters |
+| **Facade** | `CommerceService` orchestrates placement/settlement/cancel |
+| **Repository** | Spring Data in `*.persistence` |
+| **Outbox (partial)** | `PaymentOutbox` rows; drain worker still TODO |
+| **Idempotency** | Orders + wallet keys |
+| **Optimistic locking** | Product stock `@Version` |
+| **Circuit breaker / retry** | `WalletPaymentAdapter` + Resilience4j |
+| **S — Single responsibility** | `OrderPlacementService`, `PaymentSettlementService`, etc. |
+| **D — Dependency inversion** | Services depend on `PaymentPort`, not wallet HTTP |
+| **Constructor injection** | Controllers and services |
+
+**Partial or gaps (not “fully enterprise” yet)**
+
+| Item | Gap |
+|------|-----|
+| **O — Open/closed** | `CommerceService` still exposes catalogue/coupon helpers (delegates, but wide facade) |
+| **I — Interface segregation** | One fat `CommerceService` for many callers; could split facades per audience |
+| **Liskov** | No deep inheritance hierarchies — low risk |
+| **Domain events** | Publisher abstraction exists; Kafka path still fire-and-forget / no outbox for events |
+| **CQRS** | Not used (read/write share same model — OK at this scale) |
+| **Saga** | Payment compensations on cancel/return incomplete vs ideal |
+| **ACL** | No anti-corruption layer toward wallet DTOs (minimal records in adapter — acceptable) |
+
+**Verdict:** Structure matches **modular monolith + ports/adapters** with solid transaction boundaries. It is **not** a full DDD tactical pattern textbook implementation; next improvements are **audience-split controllers**, **narrower facades**, and **outbox/reconciliation**—not renaming packages again.
+
+---
+
+## 11. Cleanup & maintenance
+
+- Run `python scripts/cleanup-legacy-packages.py` after merges if old `controller/`, `service/`, `entity/` folders reappear (OneDrive/git conflicts).
+- Legacy `entity/` enums were removed; canonical types live under each feature’s `domain` package.
+
+---
+
+## 12. Related documentation
+
+- [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)
+- [docs/SERVICE_DEPENDENCIES.md](../docs/SERVICE_DEPENDENCIES.md)
+- [docs/commerce-service-13-class-retrospective.md](docs/commerce-service-13-class-retrospective.md)

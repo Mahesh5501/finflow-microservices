@@ -178,7 +178,7 @@ spring.cloud.gateway.server.webflux:
       uri: ${commerce.uri}
       predicates:
         # Commerce owns product, order, cart, coupon, return and category-related endpoints.
-        - Path=/api/v1/products/**,/api/v1/orders/**,/api/v1/carts/**,/api/v1/coupons/**,/api/v1/returns/**,/api/v1/categories/**
+        - Path=/api/v1/customer/**,/api/v1/merchant/**,/api/v1/health/**
       filters:
         - name: CircuitBreaker
           args:

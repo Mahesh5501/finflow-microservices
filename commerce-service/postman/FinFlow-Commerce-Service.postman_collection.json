@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
     "name": "FinFlow \u2014 Commerce Service",
-    "description": "Select environment **FinFlow Local**.\n\nPrereqs (Identity + Wallet):\n1. Identity: Register \u2192 Verify \u2192 Login \u2192 Create Org \u2192 Login again\n2. Wallet: Create wallet \u2192 Deposit (checkout debits wallet when payment.provider=wallet)\n3. {{orgId}} set from Identity Create Org\n\nHappy path: Catalogue \u2192 Cart checkout **or** Orders direct \u2192 Fulfilment \u2192 Returns\n\n{{commerceBaseUrl}} = http://localhost:18083\npaymentOutcome is only for payment.provider=simulated. With wallet provider omit it / null and keep wallet funded.",
+    "description": "Select environment **FinFlow Local**.\n\nPrereqs (Identity + Wallet):\n1. Identity: Register \u2192 Verify \u2192 Login \u2192 Create Org \u2192 Login again\n2. Wallet: Create wallet \u2192 Deposit\n3. {{orgId}} from Create Org (merchant writes only)\n\n**Customer (marketplace):** search \u2192 get product \u2192 cart `{productId, quantity}` \u2192 checkout. Multi-seller cart: `POST .../carts/checkout?sellerOrganisationId={{orgId}}`.\n\n{{commerceBaseUrl}} = http://localhost:18083\npaymentOutcome only when payment.provider=simulated.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -49,6 +49,41 @@
   ],
   "item": [
     {
+      "name": "Health",
+      "description": "Actuator endpoints are public. Dependency monitor is GET /api/v1/** — use Bearer + commerce:read.",
+      "item": [
+        {
+          "name": "1. Actuator Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{commerceBaseUrl}}/actuator/health"
+          }
+        },
+        {
+          "name": "2. Actuator Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{commerceBaseUrl}}/actuator/info"
+          }
+        },
+        {
+          "name": "3. Dependency checks",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/health/dependencies"
+          }
+        }
+      ]
+    },
+    {
       "name": "Catalogue",
       "item": [
         {
@@ -65,7 +100,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/categories",
+            "url": "{{commerceBaseUrl}}/api/v1/merchant/categories",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"organisationId\": {{orgId}},\n  \"name\": \"Electronics\",\n  \"slug\": \"electronics\"\n}"
@@ -96,7 +131,7 @@
                 "value": "Bearer {{accessToken}}"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/categories?organisationId={{orgId}}"
+            "url": "{{commerceBaseUrl}}/api/v1/customer/categories"
           }
         },
         {
@@ -113,7 +148,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/products",
+            "url": "{{commerceBaseUrl}}/api/v1/merchant/products",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"organisationId\": {{orgId}},\n  \"name\": \"Demo Laptop\",\n  \"unitPrice\": \"999.00\",\n  \"availableQuantity\": 25,\n  \"categoryId\": {{categoryId}}\n}"
@@ -135,7 +170,7 @@
           ]
         },
         {
-          "name": "4. List Products",
+          "name": "4. Get Product",
           "request": {
             "method": "GET",
             "header": [
@@ -144,7 +179,7 @@
                 "value": "Bearer {{accessToken}}"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/products?organisationId={{orgId}}"
+            "url": "{{commerceBaseUrl}}/api/v1/customer/products/{{productId}}"
           }
         },
         {
@@ -157,7 +192,7 @@
                 "value": "Bearer {{accessToken}}"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/products/search?organisationId={{orgId}}&q=Laptop&categoryId={{categoryId}}&page=0&size=20"
+            "url": "{{commerceBaseUrl}}/api/v1/customer/products/search&q=Laptop&categoryId={{categoryId}}&page=0&size=20"
           }
         },
         {
@@ -174,7 +209,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/products/{{productId}}",
+            "url": "{{commerceBaseUrl}}/api/v1/merchant/products/{{productId}}",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"unitPrice\": \"949.00\",\n  \"availableQuantity\": 20\n}"
@@ -200,7 +235,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/coupons",
+            "url": "{{commerceBaseUrl}}/api/v1/merchant/coupons",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"organisationId\": {{orgId}},\n  \"code\": \"{{couponCode}}\",\n  \"percentOff\": \"10.00\",\n  \"expiresAt\": null\n}"
@@ -211,7 +246,7 @@
     },
     {
       "name": "Cart",
-      "description": "Add \u2192 checkout creates PAID/PENDING order (depends on payment provider).",
+      "description": "Add by productId only. Checkout one seller at a time; use query sellerOrganisationId={{orgId}} only when the cart has multiple sellers.",
       "item": [
         {
           "name": "1. Get Cart",
@@ -223,7 +258,7 @@
                 "value": "Bearer {{accessToken}}"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/carts?organisationId={{orgId}}"
+            "url": "{{commerceBaseUrl}}/api/v1/customer/carts"
           }
         },
         {
@@ -240,10 +275,10 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/carts/items",
+            "url": "{{commerceBaseUrl}}/api/v1/customer/carts/items",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": {{orgId}},\n  \"productId\": {{productId}},\n  \"quantity\": 1\n}"
+              "raw": "{\n  \"productId\": {{productId}},\n  \"quantity\": 1\n}"
             }
           }
         },
@@ -261,10 +296,10 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/carts/items/{{productId}}",
+            "url": "{{commerceBaseUrl}}/api/v1/customer/carts/items/{{productId}}",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": {{orgId}},\n  \"quantity\": 2\n}"
+              "raw": "{\n  \"quantity\": 2\n}"
             }
           }
         },
@@ -286,10 +321,49 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/carts/checkout",
+            "url": "{{commerceBaseUrl}}/api/v1/customer/carts/checkout",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": {{orgId}},\n  \"shippingAddress\": {\n  \"line1\": \"10 FinFlow Street\",\n  \"line2\": \"Suite 2\",\n  \"city\": \"London\",\n  \"state\": \"ENG\",\n  \"postalCode\": \"EC1A1BB\",\n  \"country\": \"GB\"\n},\n  \"couponCode\": \"{{couponCode}}\",\n  \"paymentOutcome\": null\n}"
+              "raw": "{\n  \"shippingAddress\": {\n  \"line1\": \"10 FinFlow Street\",\n  \"line2\": \"Suite 2\",\n  \"city\": \"London\",\n  \"state\": \"ENG\",\n  \"postalCode\": \"EC1A1BB\",\n  \"country\": \"GB\"\n},\n  \"couponCode\": \"{{couponCode}}\",\n  \"paymentOutcome\": null\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.orderId != null) { pm.collectionVariables.set('orderId', String(body.orderId)); pm.environment.set('orderId', String(body.orderId)); }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4b. Checkout Cart (multi-seller)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{checkoutKey}}-seller"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/customer/carts/checkout?sellerOrganisationId={{orgId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shippingAddress\": {\n  \"line1\": \"10 FinFlow Street\",\n  \"line2\": \"Suite 2\",\n  \"city\": \"London\",\n  \"state\": \"ENG\",\n  \"postalCode\": \"EC1A1BB\",\n  \"country\": \"GB\"\n},\n  \"couponCode\": \"{{couponCode}}\",\n  \"paymentOutcome\": null\n}"
             }
           },
           "event": [
@@ -317,7 +391,7 @@
                 "value": "Bearer {{accessToken}}"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/carts/items/{{productId}}?organisationId={{orgId}}"
+            "url": "{{commerceBaseUrl}}/api/v1/customer/carts/items/{{productId}}"
           }
         },
         {
@@ -330,7 +404,7 @@
                 "value": "Bearer {{accessToken}}"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/carts?organisationId={{orgId}}"
+            "url": "{{commerceBaseUrl}}/api/v1/customer/carts"
           }
         }
       ]
@@ -357,10 +431,10 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/orders",
+            "url": "{{commerceBaseUrl}}/api/v1/customer/orders",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": {{orgId}},\n  \"items\": [\n    { \"productId\": {{productId}}, \"quantity\": 1 }\n  ],\n  \"shippingAddress\": {\n  \"line1\": \"10 FinFlow Street\",\n  \"line2\": \"Suite 2\",\n  \"city\": \"London\",\n  \"state\": \"ENG\",\n  \"postalCode\": \"EC1A1BB\",\n  \"country\": \"GB\"\n},\n  \"couponCode\": null,\n  \"paymentOutcome\": null\n}"
+              "raw": "{\n  \"items\": [\n    { \"productId\": {{productId}}, \"quantity\": 1 }\n  ],\n  \"shippingAddress\": {\n  \"line1\": \"10 FinFlow Street\",\n  \"line2\": \"Suite 2\",\n  \"city\": \"London\",\n  \"state\": \"ENG\",\n  \"postalCode\": \"EC1A1BB\",\n  \"country\": \"GB\"\n},\n  \"couponCode\": null,\n  \"paymentOutcome\": null\n}"
             }
           },
           "event": [
@@ -388,7 +462,7 @@
                 "value": "Bearer {{accessToken}}"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/orders?organisationId={{orgId}}&mineOnly=true"
+            "url": "{{commerceBaseUrl}}/api/v1/customer/orders"
           }
         },
         {
@@ -401,7 +475,7 @@
                 "value": "Bearer {{accessToken}}"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}"
+            "url": "{{commerceBaseUrl}}/api/v1/customer/orders/{{orderId}}"
           }
         },
         {
@@ -414,7 +488,7 @@
                 "value": "Bearer {{accessToken}}"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}/pay"
+            "url": "{{commerceBaseUrl}}/api/v1/customer/orders/{{orderId}}/pay"
           }
         },
         {
@@ -427,29 +501,55 @@
                 "value": "Bearer {{accessToken}}"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}/cancel"
+            "url": "{{commerceBaseUrl}}/api/v1/customer/orders/{{orderId}}/cancel"
           }
         }
       ]
     },
     {
-      "name": "Fulfilment",
+      "name": "Merchant orders",
       "item": [
         {
-          "name": "1. Start Fulfilment",
+          "name": "1. List orders (org)",
           "request": {
-            "method": "POST",
+            "method": "GET",
             "header": [
               {
                 "key": "Authorization",
                 "value": "Bearer {{accessToken}}"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}/fulfilment/start"
+            "url": "{{commerceBaseUrl}}/api/v1/merchant/orders?organisationId={{orgId}}&mineOnly=false"
           }
         },
         {
-          "name": "2. Complete Fulfilment",
+          "name": "2. List orders (mine only)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/merchant/orders?organisationId={{orgId}}&mineOnly=true"
+          }
+        },
+        {
+          "name": "3. Get order",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/merchant/orders/{{orderId}}"
+          }
+        },
+        {
+          "name": "4. Start fulfilment",
           "request": {
             "method": "POST",
             "header": [
@@ -458,7 +558,20 @@
                 "value": "Bearer {{accessToken}}"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}/fulfilment/complete"
+            "url": "{{commerceBaseUrl}}/api/v1/merchant/orders/{{orderId}}/fulfilment/start"
+          }
+        },
+        {
+          "name": "5. Complete fulfilment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{commerceBaseUrl}}/api/v1/merchant/orders/{{orderId}}/fulfilment/complete"
           }
         }
       ]
@@ -480,7 +593,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}/returns",
+            "url": "{{commerceBaseUrl}}/api/v1/customer/orders/{{orderId}}/returns",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"reason\": \"Damaged on arrival\"\n}"
@@ -511,7 +624,7 @@
                 "value": "Bearer {{accessToken}}"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}/returns"
+            "url": "{{commerceBaseUrl}}/api/v1/customer/orders/{{orderId}}/returns"
           }
         },
         {
@@ -524,7 +637,7 @@
                 "value": "Bearer {{accessToken}}"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/returns/{{returnId}}/approve"
+            "url": "{{commerceBaseUrl}}/api/v1/merchant/returns/{{returnId}}/approve"
           }
         },
         {
@@ -537,7 +650,7 @@
                 "value": "Bearer {{accessToken}}"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/returns/{{returnId}}/reject"
+            "url": "{{commerceBaseUrl}}/api/v1/merchant/returns/{{returnId}}/reject"
           }
         },
         {
@@ -550,7 +663,7 @@
                 "value": "Bearer {{accessToken}}"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/returns/{{returnId}}/complete"
+            "url": "{{commerceBaseUrl}}/api/v1/merchant/returns/{{returnId}}/complete"
           }
         }
       ]

@@ -1,7 +1,7 @@
-
 package com.finflow.commerce.exception;
 
 import jakarta.validation.ConstraintViolationException;
+import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
@@ -12,111 +12,68 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * Central exception handler for REST controllers.
- * Converts application exceptions into consistent HTTP responses.
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    /**
-     * Handles custom business/API exceptions.
-     * Uses the status and error code supplied by ApiException.
-     * @param ex the ApiException that occurred
-     * @return a ResponseEntity with the HTTP status, error code and human-readable message
-     */
     @ExceptionHandler(ApiException.class)
-    public ResponseEntity<Map<String, String>> api(ApiException ex) {
-        // Return the HTTP status and error code from the ApiException.
+    public ResponseEntity<ErrorResponse> api(ApiException ex) {
         return ResponseEntity.status(ex.getStatus())
-                .body(Map.of(
-                        "code", ex.getCode(),
-                        "message", ex.getMessage()
-                ));
+                .body(ErrorResponse.of(ex.getCode(), ex.getMessage(), traceId()));
     }
 
-    /**
-     * Handles validation failures for request bodies.
-     * Example: ProductRequest has @NotBlank on its name field, but the client sends an empty name.
-     * @param ex the MethodArgumentNotValidException that occurred
-     * @return a ResponseEntity with the HTTP status, error code and human-readable message
-     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, Object>> validation(
-            MethodArgumentNotValidException ex) {
-
-        // Extract every field-level validation error. Example: "name: must not be blank".
+    public ResponseEntity<ErrorResponse> validation(MethodArgumentNotValidException ex) {
         List<String> details = ex.getBindingResult()
                 .getFieldErrors()
                 .stream()
-                .map(error ->
-                        error.getField() + ": " + error.getDefaultMessage()
-                )
+                .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .toList();
 
-        // Return HTTP 400 with a common error code, a general message and individual validation details.
         return ResponseEntity.badRequest()
-                .body(Map.of(
-                        "code", "VALIDATION_FAILED",
-                        "message", "Validation failed",
-                        "details", details
+                .body(ErrorResponse.of(
+                        "VALIDATION_FAILED",
+                        "Validation failed",
+                        traceId(),
+                        details
                 ));
     }
 
-    /**
-     * Handles common client-side request errors.
-     * Includes ConstraintViolationException, IllegalArgumentException and MissingRequestHeaderException.
-     * @param ex the Exception that occurred
-     * @return a ResponseEntity with the HTTP status, error code and human-readable message
-     */
     @ExceptionHandler({
             ConstraintViolationException.class,
             IllegalArgumentException.class,
             MissingRequestHeaderException.class
     })
-    public ResponseEntity<Map<String, String>> badRequest(Exception ex) {
-
+    public ResponseEntity<ErrorResponse> badRequest(Exception ex) {
         return ResponseEntity.badRequest()
-                .body(Map.of(
-                        "code", "BAD_REQUEST",
-                        "message", ex.getMessage()
-                ));
+                .body(ErrorResponse.of("BAD_REQUEST", ex.getMessage(), traceId()));
     }
 
-    /**
-     * Handles optimistic-locking conflicts.
-     * This can happen when another transaction updates a versioned entity before the current transaction completes.
-     * @param ex the OptimisticLockingFailureException that occurred
-     * @return a ResponseEntity with the HTTP status, error code and human-readable message
-     */
     @ExceptionHandler(OptimisticLockingFailureException.class)
-    public ResponseEntity<Map<String, String>> optimisticLock(
-            OptimisticLockingFailureException ex) {
-
+    public ResponseEntity<ErrorResponse> optimisticLock(OptimisticLockingFailureException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of(
-                        "code", "CONCURRENT_UPDATE",
-                        "message",
-                        "Stock changed concurrently. Retry with the same Idempotency-Key."
+                .body(ErrorResponse.of(
+                        "CONCURRENT_UPDATE",
+                        "Stock changed concurrently. Retry with the same Idempotency-Key.",
+                        traceId()
                 ));
     }
 
-    /**
-     * Handles database integrity conflicts.
-     * Example: attempting to insert a value that violates a database uniqueness constraint.
-     * @param ex the DataIntegrityViolationException that occurred
-     * @return a ResponseEntity with the HTTP status, error code and human-readable message
-     */
     @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<Map<String, String>> dataConflict(
-            DataIntegrityViolationException ex) {
-
+    public ResponseEntity<ErrorResponse> dataConflict(DataIntegrityViolationException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of(
-                        "code", "DATA_CONFLICT",
-                        "message", "A uniqueness constraint was violated."
+                .body(ErrorResponse.of(
+                        "DATA_CONFLICT",
+                        "A uniqueness constraint was violated.",
+                        traceId()
                 ));
+    }
+
+    private static String traceId() {
+        String fromMdc = MDC.get("traceId");
+        return fromMdc != null ? fromMdc : "unknown";
     }
 }

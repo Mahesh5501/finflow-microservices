@@ -3,8 +3,6 @@ package com.finflow.commerce;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.scheduling.annotation.EnableScheduling;
-
 /**
  * Main entry point for Commerce Service.
  *
@@ -16,7 +14,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * - Simulated payment implementation
  */
 @SpringBootApplication
-@EnableScheduling
 public class CommerceServiceApplication {
 
     /**
