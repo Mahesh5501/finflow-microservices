@@ -1,5 +1,6 @@
 package com.finflow.commerce.health;
 
+import com.finflow.commerce.security.CommerceSecurityProperties;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -40,6 +41,7 @@ public class CommerceDependencyHealthService {
     private final String jwksUrl;
     private final String paymentProvider;
     private final ObjectProvider<RestClient> walletRestClient;
+    private final CommerceSecurityProperties securityProperties;
 
     public CommerceDependencyHealthService(
             DataSource dataSource,
@@ -47,13 +49,15 @@ public class CommerceDependencyHealthService {
             @Value("${identity.jwks-url}") String jwksUrl,
             @Value("${payment.provider}") String paymentProvider,
             @Value("${wallet.base-url:http://localhost:18082}") String walletBaseUrl,
-            ObjectProvider<RestClient> walletRestClient
+            ObjectProvider<RestClient> walletRestClient,
+            CommerceSecurityProperties securityProperties
     ) {
         this.dataSource = dataSource;
         this.redisConnectionFactory = redisConnectionFactory;
         this.jwksUrl = jwksUrl;
         this.paymentProvider = paymentProvider;
         this.walletRestClient = walletRestClient;
+        this.securityProperties = securityProperties;
         this.probeClient = RestClient.builder().baseUrl(walletBaseUrl).build();
     }
 
@@ -95,6 +99,9 @@ public class CommerceDependencyHealthService {
     }
 
     private Check probeJwks() {
+        if (!securityProperties.jwtValidationEnabled()) {
+            return Check.skipped("identity-jwks", "JWT validation disabled for local testing");
+        }
         try {
             RestClient.create().get().uri(jwksUrl).retrieve().toBodilessEntity();
             return Check.up("identity-jwks");

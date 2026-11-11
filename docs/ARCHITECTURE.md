@@ -1,6 +1,6 @@
 # Actual FinFlow architecture
 
-Source assessment: **2026-11-07**, commit `5d79a90`. This is an implementation map; [02-hld/ARCHITECTURE.md](02-hld/ARCHITECTURE.md), [03-lld](03-lld/README.md) and SystemDesign describe a wider target. Verification and risks are in [PROJECT_STATUS.md](../PROJECT_STATUS.md).
+Initial source assessment: **2026-11-07**, commit `5d79a90`; Commerce package/workflow descriptions refreshed **2026-11-11**. This is an implementation map; [02-hld/ARCHITECTURE.md](02-hld/ARCHITECTURE.md), [03-lld](03-lld/README.md) and SystemDesign describe a wider target. Verification and risks are in [PROJECT_STATUS.md](../PROJECT_STATUS.md).
 
 ## Repository and technology
 
@@ -25,7 +25,7 @@ flowchart LR
     Wallet --> WDB[(wallet schema)]
     Commerce --> CDB[(commerce schema)]
     Notification --> NDB[(notification schema)]
-    Commerce -->|WalletPaymentAdapter HTTP + caller JWT| Wallet
+    Commerce -->|WalletPaymentGateway HTTP + caller JWT| Wallet
     Wallet -->|Fetch public JWKS| Identity
     Commerce -->|Fetch public JWKS| Identity
     Notification -->|Fetch public JWKS| Identity
@@ -35,7 +35,7 @@ flowchart LR
 
 Kafka arrows are disabled by default. Logging publication creates no notification record. Direct service HTTP ports exist; gateway is not the only security boundary.
 
-MVC modules use controller -> service -> repository/entity layering, DTO records and constructor injection. Identity DTOs separate request/response packages; others use dto. Services enforce user/organisation access; domain methods enforce selected invariants. PaymentPort is a port/adapter seam, not evidence of a full hexagonal architecture throughout the repository.
+Commerce uses feature-first api -> application -> persistence/domain packages; other MVC modules retain their existing layouts. DTO records and constructor injection remain. Identity DTOs separate request/response packages; others use dto. Services enforce user/organisation access; domain methods enforce selected invariants. PaymentGateway is a port/adapter seam, not evidence of a full hexagonal architecture throughout the repository.
 
 ## Workflows traced through source
 
@@ -58,28 +58,19 @@ Deposit/withdraw use a local transaction: owned wallet -> global history-key loo
 
 Wallet lifecycle: ACTIVE <-> BLOCKED; ACTIVE/BLOCKED -> CLOSED only at zero balance; CLOSED cannot reopen. A wallet owner with wallets:write can block/unblock their own wallet. Funding/deposit is a direct API operation, not proof of an external payment received.
 
-### Commerce scheduler initialization (2026-11-09)
+### Commerce feature architecture (2026-11-11)
 
-ProductionFeaturesConfig creates the ShedLock JDBC table with CREATE TABLE IF NOT EXISTS while constructing its LockProvider, before the maintenance jobs can acquire locks. This is explicit startup DDL, not a JPA entity or migration runner. Existing lock rows are retained; the datasource account requires CREATE permission. Initialization failure prevents startup. Runtime verification of this change is pending; no SQL was executed during implementation.
+Commerce is a feature-first modular monolith: catalogue, cart, order, payment, returns and coupon own their implementation; customer/merchant HTTP adapters stay separate. See the current [package map](../commerce-service/PACKAGE-STRUCTURE.md), [source-traced feature flows](../commerce-service/COMMERCE_SERVICE_ARCHITECTURE.md) and [move inventory](../commerce-service/docs/FEATURE-FIRST-REFACTOR.md). Older status entries describe previous layouts and scheduler configurations.
 
-### Order placement and payment
+Catalogue controllers call CatalogueService with ProductMapper/repositories. Marketplace product reads span sellers and require ACTIVE products; merchant writes require org access. CacheConfig activates Redis-backed category caching; membership is checked before cache lookup, and the DTO supports the existing serializer. No ProductService/CategoryService split was necessary. CartService keeps owner/seller buckets and exposes a merged view with live prices; one-seller checkout snapshots lines, places/pays an order, then clears that seller separately.
 
-1. OrderController -> CommerceService.createOrder -> OrderPlacementService.placePendingOrder (proxied @Transactional).
-2. Validate requested org access/key; replay lookup is global. For a new order, load active same-org products, decrement available stock, snapshot name/price/quantity; optionally embed address/apply active nonexpired percent coupon. Currency is INR.
-3. Save PENDING_PAYMENT order + item rows, idempotency record and PENDING payment_outbox in one transaction. Product @Version handles stock conflicts.
-4. After placement returns/commits, PaymentSettlementService calls PaymentPort outside that transaction. Main defaults use WalletPaymentAdapter; tests use SimulatedPaymentAdapter.
-5. Wallet adapter gets customer's own wallet, checks currency, POSTs withdrawal with caller bearer JWT and stable commerce-pay-{orderId} key. Refund POSTs deposit with commerce-refund-{orderId}. 4xx generally declines; transport/5xx ambiguity returns UNCERTAIN. No explicit client timeout/retry configuration exists here.
-6. A follow-up TransactionTemplate updates order/work state: APPROVED -> CONFIRMED/DONE with wallet/transaction IDs; DECLINED -> PAYMENT_FAILED/FAILED and stock released; UNCERTAIN -> ACTION_REQUIRED/PENDING with stock retained.
-7. ORDER_PAID publishes after settlement commit. No automatic work-draining worker exists. /pay is customer-only and retries pending/action-required orders; work lookup query alone is not recovery.
+CommerceService now handles orders only. OrderPlacementService validates seller/products/stock, checks owner/seller/payload-key replay, applies CouponService lookup plus Coupon domain pricing, and atomically writes order/items, reservation, replay record and payment work. It commits before PaymentSettlementService calls PaymentGateway. A short TransactionTemplate applies APPROVED -> CONFIRMED/DONE, DECLINED -> PAYMENT_FAILED/FAILED + stock release, UNCERTAIN -> ACTION_REQUIRED/PENDING + stock retained. Repeated UNCERTAIN keeps ACTION_REQUIRED rather than requesting an invalid same-state transition.
 
-### Cart, cancellation, fulfilment, expiry and returns
+PaymentGateway is the renamed existing port; wallet/simulated property values and HTTP contracts remain. WalletPaymentGateway forwards the caller token and stable pay/refund keys to Wallet, never accesses wallet tables, and retains 3s connect/10s read timeouts. Most caught failures bypass effective retry/circuit-breaker observation. MockPaymentGateway marks internal results as simulated; approved simulations confirm without fake wallet references, while real approvals retain required-reference validation. There is no recovery worker or durable event outbox.
 
-- Cart is per user+org. Reads return current catalogue prices; no cart-level reservation. Add increments, PUT replaces/removes quantity, DELETE removes/clears.
-- Checkout snapshots lines in a short transaction, creates/settles order, then separately clears cart even for declined/uncertain outcomes. Checkout requires shipping address; direct order permits no address. Replay/concurrent cart edits are not safely coordinated.
-- Customer-only cancel permits CREATED/PENDING_PAYMENT/ACTION_REQUIRED/CONFIRMED. Confirmed orders refund first over HTTP; a separate transactional service releases stock and assigns CANCELLED. No persisted refund work/state bridges failures.
-- Fulfilment start requires CONFIRMED; completion accepts CONFIRMED or FULFILMENT_PENDING and emits ORDER_FULFILLED. No shipping provider is called.
-- Maintenance defaults: every 60 s expire PENDING_PAYMENT/ACTION_REQUIRED older than 30 min (createdAt), release stock, fail unfinished work, emit ORDER_EXPIRED; every 300 s delete carts untouched for 72 h. Jobs are disabled in commerce tests; service methods are tested directly.
-- Customer of FULFILLED order requests a return. Same-org write callers may approve/reject; complete requires APPROVED, refunds outside DB transaction then restocks/completes in TransactionTemplate and emits RETURN_COMPLETED. Original order stays FULFILLED. No live refund/return tests, single-return constraint, partial-return model, return window or external logistics integration exists.
+Customer pay/cancel/return requires ownership; seller fulfilment/return decisions require org access. Confirmed cancellation refunds before a local stock/status transaction. Returns require FULFILLED -> REQUESTED -> seller decision -> refund -> restock/COMPLETED; original orders stay FULFILLED. Merchant-token refunds may fail the wallet's owner-only checks. Cart replay/edit races, return duplication and settlement/cancel/expiry/refund coordination remain open. Maintenance services are callable, but no scheduler/ShedLock configuration is currently wired; POM dependencies and TTL hints alone do not activate jobs.
+
+Standalone Commerce testing now has an explicit local profile: loopback bind, JWT validation disabled, configured user/org principal and simulated payments. Default/integrated startup still validates JWTs; re-enable by removing local or overriding commerce.security.jwt-validation-enabled=true. Existing org/owner checks remain. See [Commerce README](../commerce-service/README.md). Health skips disabled Identity/Wallet integrations in local mode; MySQL/Redis settings are unchanged. Automatic cart seller inference now reads lazy items inside a short transaction. Obsolete migration scripts/backups/scaffolding and PaymentSimulator were removed after the completed refactor.
 
 ### Events and notifications
 
@@ -97,7 +88,7 @@ Public POST endpoints (no access JWT required):
 
 | Path | Body / success behaviour |
 |---|---|
-| /auth/register | email/password (8–72 chars) -> 201 profile + dev token; 409 duplicate |
+| /auth/register | email/password (8â€“72 chars) -> 201 profile + dev token; 409 duplicate |
 | /auth/verify-email | token -> 204; invalid/used/expired -> 401 |
 | /auth/resend-verification | email -> generic message + dev token when applicable |
 | /auth/login | email/password -> accessToken/refreshToken/tokenType/expiresInSeconds/userId/email/orgIds/permissions; 401 rejection |
@@ -136,30 +127,7 @@ GETs require wallets:read; POSTs wallets:write except transfer requires transfer
 
 ### Commerce
 
-All GET /api/v1/** require commerce:read; POST/PUT/PATCH/DELETE require commerce:write. Services also check orgIds; pay/cancel/request-return check customer identity. MEMBER currently has commerce:write.
-
-| Method/path | Behaviour |
-|---|---|
-| POST /categories; GET /categories?organisationId= | 201 create name/slug for org; list by name |
-| POST /products; GET /products?organisationId= | 201 create org/name/unitPrice/availableQuantity/optional categoryId; list |
-| GET /products/search?organisationId=&q=&categoryId= | Optional substring/category filter; pageable, default size 20 |
-| PATCH /products/{productId} | Optional price/availableQuantity/categoryId; no name/status update or category removal via null |
-| POST /coupons | 201 org/code/percentOff (1–90)/optional expiry; no list/deactivate endpoint |
-| GET /carts?organisationId= | Caller cart, or unsaved empty view |
-| POST /carts/items | organisationId/productId/quantity -> updated cart |
-| PUT /carts/items/{productId} | organisationId/quantity; zero removes |
-| DELETE /carts/items/{productId}?organisationId=; DELETE /carts?organisationId= | Updated cart after remove/clear |
-| POST /carts/checkout | Required Idempotency-Key; org/address/optional coupon/paymentOutcome -> 201 order |
-| POST /orders | Required Idempotency-Key; org/items/optional address/coupon/paymentOutcome -> 201 order, including failed/action-required status |
-| GET /orders?organisationId=&mineOnly= | mineOnly defaults true; false lists all org orders for any allowed reader |
-| GET /orders/{orderId} | Any allowed org reader, not customer-only |
-| POST /orders/{orderId}/pay; /cancel | Customer-only; forwards caller JWT |
-| POST /orders/{orderId}/fulfilment/start; /fulfilment/complete | Same-org write caller; state updates |
-| POST /orders/{orderId}/returns | Customer + reason -> 201 return; FULFILLED only |
-| GET /orders/{orderId}/returns | Same-org reader |
-| POST /returns/{returnId}/approve; /reject; /complete | Same-org writer; complete forwards caller JWT for customer wallet refund |
-
-paymentOutcome only controls simulator; wallet provider ignores it. No delete product/category, product activation, shipping tracking, coupon-management suite or general order-edit endpoints exist.
+The current routes use `/api/v1/customer/**` and `/api/v1/merchant/**`, preserved by this package refactor. The complete [HTTP surface and flow guide](../commerce-service/COMMERCE_SERVICE_ARCHITECTURE.md#preserved-http-surface) lists methods, paths and security boundaries. Catalogue, cart, customer orders/returns and merchant products/categories/coupons/orders/returns retain the original JSON and Idempotency-Key contracts. GET /api/v1/** requires commerce:read and mutations commerce:write; ownership/org checks also apply. The dependency-health API is currently protected by commerce:read. Audience package names alone do not establish a stronger permission model.
 
 ### Notification and gateway
 

@@ -1,6 +1,8 @@
 
 package com.finflow.commerce.security;
 
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -16,10 +18,26 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *
  * Configures stateless JWT-based authentication and
  * permission-based authorisation.
+ * Normal startup uses verified JWTs. Explicit guarded local mode supplies a fixed
+ * principal through the same filter; permissions and ownership checks still run.
  */
 @Configuration
 @EnableWebSecurity
+@EnableConfigurationProperties(CommerceSecurityProperties.class)
 public class SecurityConfig {
+
+    /**
+     * The security chain owns this filter's order and SecurityContext lifecycle.
+     * Disable its separate servlet registration so the component does not also
+     * run outside the chain. This matters when local authentication supplies the
+     * principal before the existing permission/ownership checks execute.
+     */
+    @Bean
+    FilterRegistrationBean<JwtAuthFilter> jwtFilterRegistration(JwtAuthFilter filter) {
+        FilterRegistrationBean<JwtAuthFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
 
     /**
      * Custom filter that extracts and verifies JWT access tokens.

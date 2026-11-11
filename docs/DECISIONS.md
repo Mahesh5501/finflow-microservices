@@ -25,7 +25,7 @@ Assessment date: 2026-11-07. These are observations of code/configuration, **not
 | Hibernate-managed schema and H2 tests | Main ddl-auto=update; test create-drop | Existing implementation choice. Original reason and production suitability not established; no migration tool/baseline. |
 | Non-root Java 21 containers, skip tests at image build | All Dockerfiles | Runtime UID/GID 10001; Maven build stage skips tests. Reason for skip policy is not documented. |
 | Local Maven Central mirror | Gateway/identity/wallet .mvn/maven.config and settings; commerce settings without selector | Identity settings comment explicitly avoids company Nexus 401 for public dependencies. Notification has no corresponding settings; Docker build excludes these files. |
-| Keep legacy types for compatibility with notes | PaymentSimulator; notificationservice legacy class | Deprecation comments explicitly preserve old references. Do not treat them as second implementations. |
+| Keep legacy types only while they have callers | Commerce PaymentSimulator removed 2026-11-11 after caller review; notification legacy type unchanged | Historical learning examples do not require keeping a no-op Commerce class indefinitely. |
 
 ## Decisions requiring discussion
 
@@ -65,12 +65,24 @@ Identity sends plain-text mail via JavaMailSender when `mail.enabled=true`. Loca
 
 ## 2026-11-08: Identity narrow Lombok (user-approved)
 
-Identity uses Lombok only for `@Getter` (entities/`ApiException`) and `@Slf4j`. Explicit constructors kept for DI visibility — no `@RequiredArgsConstructor`. No `@Data`. DTOs remain records.
+Identity uses Lombok only for `@Getter` (entities/`ApiException`) and `@Slf4j`. Explicit constructors kept for DI visibility â€” no `@RequiredArgsConstructor`. No `@Data`. DTOs remain records.
 
-## 2026-11-08: Identity rate-limit Redis down → 503
+## 2026-11-08: Identity rate-limit Redis down â†’ 503
 
 Login/forgot/resend still fail closed when Redis is unreachable (no unlimited attempts). Response is `503 RATE_LIMIT_UNAVAILABLE`, not the security entry-point `401 Valid Bearer access token required`.
 
 ## 2026-11-09: Initialize the commerce ShedLock table before scheduled jobs
 
 The user approved automatic table creation after a runtime log showed that Hibernate had not created commerce.shedlock. Keep initialization small and local to ProductionFeaturesConfig.lockProvider: use the existing JdbcTemplate to execute CREATE TABLE IF NOT EXISTS before returning the LockProvider. This avoids a separate SQL file, runner, entity/repository or migration dependency for this task and preserves existing lock rows. The database account requires CREATE permission; failure prevents provider initialization. This does not repair incompatible existing schemas, replace production migration management, or prove successful deployment. No SQL/startup/tests were executed by the agent; the latest user run is blocked by an invalid compiled WalletPaymentAdapter.
+
+## 2026-11-11: Commerce feature-first modular monolith
+
+Complete the existing Catalogue migration and organise cart/order/returns/coupon by api audience, application, domain, persistence and DTO. Keep the application root, stack, schema and HTTP/event contracts. Retain a cohesive CatalogueService; introduce CouponService to remove coupon management from the order facade. Move the order-to-event factory to order.application so event infrastructure does not depend back on entities. Rename the existing payment seam/adapters to PaymentGateway, WalletPaymentGateway and MockPaymentGateway while retaining wallet/simulated configuration and one provider path. No new dependency, CQRS or microservice.
+
+Activate the existing cache annotations, guard membership before category cache lookup, and make the category DTO compatible with the configured serializer. Keep wallet HTTP outside the placement transaction and document actual recovery/concurrency gaps rather than promising durable outbox processing. A regression exposed repeated UNCERTAIN -> ACTION_REQUIRED self-transition failure; settlement now retains that state while updating pending work, preserving the domain transition rules. See commerce architecture and change inventory for verified checks and remaining production-readiness work.
+
+## 2026-11-11: Explicit standalone Commerce testing mode and cleanup
+
+Use a local profile alone plus loopback binding to permit commerce.security.jwt-validation-enabled=false. Supply one server-configured principal instead of permitAll/null controllers or trusting unsigned token claims/request owner headers. Keep normal JWT verification enabled by default, preserve permissions/org/owner checks, and reject unsafe bypass startup. Register the JWT filter only in Spring Security's chain. Local simulation avoids dependencies on Identity/Wallet; health skips those disabled integrations. Restore normal behavior by removing local, or explicitly turn validation back on.
+
+PaymentResult adds internal simulation metadata; simulated approvals need no fabricated wallet/ledger references, while real approvals retain CommerceOrder reference validation. Fix automatic single-seller cart inference with a short transaction rather than enabling open-in-view or wrapping external payment in a transaction. Remove completed migration scripts/backups/scaffold markers and unused PaymentSimulator under the user's cleanup request, preserving active sources/tests and learning docs. No dependency/schema/public API changes.

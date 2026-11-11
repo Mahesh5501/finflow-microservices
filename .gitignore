@@ -24,6 +24,9 @@ Thumbs.db
 **/__pycache__/
 *.pyc
 
+# Completed Commerce migrations must not leave duplicate source backups in the project.
+commerce-service/.migration-backups/
+
 # Identity local signing material (working directory may be repo root or service root).
 .local/
 *.pk8

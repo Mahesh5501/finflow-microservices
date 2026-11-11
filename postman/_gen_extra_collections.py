@@ -1,8 +1,10 @@
-"""Generate Commerce, Notification, Transaction, and API Gateway Postman collections."""
+"""Generate Commerce, Notification, and API Gateway Postman collections."""
 from __future__ import annotations
 
 import json
 from pathlib import Path
+
+from _commerce_collection import commerce_collection
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -50,251 +52,6 @@ def write(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     print("wrote", path)
-
-
-SHIPPING = """{
-  "line1": "10 FinFlow Street",
-  "line2": "Suite 2",
-  "city": "London",
-  "state": "ENG",
-  "postalCode": "EC1A1BB",
-  "country": "GB"
-}"""
-
-
-def commerce_collection() -> dict:
-    return {
-        "info": {
-            "_postman_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-            "name": "FinFlow — Commerce Service",
-            "description": (
-                "Select environment **FinFlow Local**.\n\n"
-                "Prereqs (Identity + Wallet):\n"
-                "1. Identity: Register → Verify → Login → Create Org → Login again\n"
-                "2. Wallet: Create wallet → Deposit (checkout debits wallet when payment.provider=wallet)\n"
-                "3. {{orgId}} set from Identity Create Org\n\n"
-                "Happy path: Catalogue → Cart checkout **or** Orders direct → Fulfilment → Returns\n\n"
-                "{{commerceBaseUrl}} = http://localhost:18083\n"
-                "paymentOutcome is only for payment.provider=simulated. "
-                "With wallet provider omit it / null and keep wallet funded."
-            ),
-            "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-        },
-        "variable": [
-            {"key": "commerceBaseUrl", "value": "http://localhost:18083"},
-            {"key": "accessToken", "value": ""},
-            {"key": "orgId", "value": ""},
-            {"key": "categoryId", "value": ""},
-            {"key": "productId", "value": ""},
-            {"key": "orderId", "value": ""},
-            {"key": "returnId", "value": ""},
-            {"key": "couponCode", "value": "SAVE10"},
-            {"key": "orderKey", "value": "order-demo-001"},
-            {"key": "checkoutKey", "value": "checkout-demo-001"},
-        ],
-        "item": [
-            {
-                "name": "Catalogue",
-                "item": [
-                    named(
-                        "1. Create Category",
-                        "POST",
-                        "{{commerceBaseUrl}}/api/v1/categories",
-                        auth() + json_ct(),
-                        '{\n  "organisationId": {{orgId}},\n  "name": "Electronics",\n  "slug": "electronics"\n}',
-                        save_id("categoryId", "categoryId"),
-                    ),
-                    named(
-                        "2. List Categories",
-                        "GET",
-                        "{{commerceBaseUrl}}/api/v1/categories?organisationId={{orgId}}",
-                        auth(),
-                    ),
-                    named(
-                        "3. Create Product",
-                        "POST",
-                        "{{commerceBaseUrl}}/api/v1/products",
-                        auth() + json_ct(),
-                        '{\n  "organisationId": {{orgId}},\n  "name": "Demo Laptop",\n  "unitPrice": "999.00",\n  "availableQuantity": 25,\n  "categoryId": {{categoryId}}\n}',
-                        save_id("productId", "productId"),
-                    ),
-                    named(
-                        "4. List Products",
-                        "GET",
-                        "{{commerceBaseUrl}}/api/v1/products?organisationId={{orgId}}",
-                        auth(),
-                    ),
-                    named(
-                        "5. Search Products",
-                        "GET",
-                        "{{commerceBaseUrl}}/api/v1/products/search?organisationId={{orgId}}&q=Laptop&categoryId={{categoryId}}&page=0&size=20",
-                        auth(),
-                    ),
-                    named(
-                        "6. Update Product (PATCH)",
-                        "PATCH",
-                        "{{commerceBaseUrl}}/api/v1/products/{{productId}}",
-                        auth() + json_ct(),
-                        '{\n  "unitPrice": "949.00",\n  "availableQuantity": 20\n}',
-                    ),
-                ],
-            },
-            {
-                "name": "Coupons",
-                "item": [
-                    named(
-                        "1. Create Coupon",
-                        "POST",
-                        "{{commerceBaseUrl}}/api/v1/coupons",
-                        auth() + json_ct(),
-                        '{\n  "organisationId": {{orgId}},\n  "code": "{{couponCode}}",\n  "percentOff": "10.00",\n  "expiresAt": null\n}',
-                    ),
-                ],
-            },
-            {
-                "name": "Cart",
-                "description": "Add → checkout creates PAID/PENDING order (depends on payment provider).",
-                "item": [
-                    named(
-                        "1. Get Cart",
-                        "GET",
-                        "{{commerceBaseUrl}}/api/v1/carts?organisationId={{orgId}}",
-                        auth(),
-                    ),
-                    named(
-                        "2. Add Item",
-                        "POST",
-                        "{{commerceBaseUrl}}/api/v1/carts/items",
-                        auth() + json_ct(),
-                        '{\n  "organisationId": {{orgId}},\n  "productId": {{productId}},\n  "quantity": 1\n}',
-                    ),
-                    named(
-                        "3. Upsert Item Qty",
-                        "PUT",
-                        "{{commerceBaseUrl}}/api/v1/carts/items/{{productId}}",
-                        auth() + json_ct(),
-                        '{\n  "organisationId": {{orgId}},\n  "quantity": 2\n}',
-                    ),
-                    named(
-                        "4. Checkout Cart",
-                        "POST",
-                        "{{commerceBaseUrl}}/api/v1/carts/checkout",
-                        auth() + idem("checkoutKey") + json_ct(),
-                        '{\n  "organisationId": {{orgId}},\n  "shippingAddress": '
-                        + SHIPPING
-                        + ',\n  "couponCode": "{{couponCode}}",\n  "paymentOutcome": null\n}',
-                        save_id("orderId", "orderId"),
-                    ),
-                    named(
-                        "5. Remove Item",
-                        "DELETE",
-                        "{{commerceBaseUrl}}/api/v1/carts/items/{{productId}}?organisationId={{orgId}}",
-                        auth(),
-                    ),
-                    named(
-                        "6. Clear Cart",
-                        "DELETE",
-                        "{{commerceBaseUrl}}/api/v1/carts?organisationId={{orgId}}",
-                        auth(),
-                    ),
-                ],
-            },
-            {
-                "name": "Orders",
-                "description": "Direct place-order path (no cart). Use a fresh Idempotency-Key each new order.",
-                "item": [
-                    named(
-                        "1. Create Order",
-                        "POST",
-                        "{{commerceBaseUrl}}/api/v1/orders",
-                        auth() + idem("orderKey") + json_ct(),
-                        '{\n  "organisationId": {{orgId}},\n  "items": [\n    { "productId": {{productId}}, "quantity": 1 }\n  ],\n  "shippingAddress": '
-                        + SHIPPING
-                        + ',\n  "couponCode": null,\n  "paymentOutcome": null\n}',
-                        save_id("orderId", "orderId"),
-                    ),
-                    named(
-                        "2. List Orders (mine)",
-                        "GET",
-                        "{{commerceBaseUrl}}/api/v1/orders?organisationId={{orgId}}&mineOnly=true",
-                        auth(),
-                    ),
-                    named(
-                        "3. Get Order",
-                        "GET",
-                        "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}",
-                        auth(),
-                    ),
-                    named(
-                        "4. Pay Order",
-                        "POST",
-                        "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}/pay",
-                        auth(),
-                    ),
-                    named(
-                        "5. Cancel Order",
-                        "POST",
-                        "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}/cancel",
-                        auth(),
-                    ),
-                ],
-            },
-            {
-                "name": "Fulfilment",
-                "item": [
-                    named(
-                        "1. Start Fulfilment",
-                        "POST",
-                        "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}/fulfilment/start",
-                        auth(),
-                    ),
-                    named(
-                        "2. Complete Fulfilment",
-                        "POST",
-                        "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}/fulfilment/complete",
-                        auth(),
-                    ),
-                ],
-            },
-            {
-                "name": "Returns",
-                "item": [
-                    named(
-                        "1. Request Return",
-                        "POST",
-                        "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}/returns",
-                        auth() + json_ct(),
-                        '{\n  "reason": "Damaged on arrival"\n}',
-                        save_id("returnId", "returnId"),
-                    ),
-                    named(
-                        "2. List Returns for Order",
-                        "GET",
-                        "{{commerceBaseUrl}}/api/v1/orders/{{orderId}}/returns",
-                        auth(),
-                    ),
-                    named(
-                        "3. Approve Return",
-                        "POST",
-                        "{{commerceBaseUrl}}/api/v1/returns/{{returnId}}/approve",
-                        auth(),
-                    ),
-                    named(
-                        "4. Reject Return",
-                        "POST",
-                        "{{commerceBaseUrl}}/api/v1/returns/{{returnId}}/reject",
-                        auth(),
-                    ),
-                    named(
-                        "5. Complete Return (refund)",
-                        "POST",
-                        "{{commerceBaseUrl}}/api/v1/returns/{{returnId}}/complete",
-                        auth(),
-                    ),
-                ],
-            },
-        ],
-    }
 
 
 def notification_collection() -> dict:
@@ -760,7 +517,7 @@ def update_environment() -> None:
     write(env_path, data)
 
 
-def main(*, gateway_only=False) -> None:
+def main(*, gateway_only=False, commerce_only=False) -> None:
     if gateway_only:
         write(
             ROOT / "api-gateway/postman/FinFlow-API-Gateway.postman_collection.json",
@@ -771,6 +528,8 @@ def main(*, gateway_only=False) -> None:
         ROOT / "commerce-service/postman/FinFlow-Commerce-Service.postman_collection.json",
         commerce_collection(),
     )
+    if commerce_only:
+        return
     write(
         ROOT / "notification-service/postman/FinFlow-Notification-Service.postman_collection.json",
         notification_collection(),
@@ -786,5 +545,8 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--gateway-only", action="store_true", help="Regenerate only gateway tests, preserving other collections and the shared environment.")
-    main(gateway_only=parser.parse_args().gateway_only)
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--gateway-only", action="store_true", help="Regenerate only gateway tests, preserving other collections and the shared environment.")
+    selection.add_argument("--commerce-only", action="store_true", help="Regenerate only Commerce collection; preserve other services and shared environment.")
+    args = parser.parse_args()
+    main(gateway_only=args.gateway_only, commerce_only=args.commerce_only)

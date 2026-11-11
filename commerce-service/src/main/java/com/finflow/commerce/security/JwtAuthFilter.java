@@ -10,6 +10,10 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -19,15 +23,25 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.security.Key;
 import java.util.Collection;
+import java.util.Arrays;
 import java.util.List;
 
 /**
  * JWT authentication filter.
  * - Runs once per request and checks whether the request contains a valid Bearer access token.
  * - If the token is valid, it creates an authenticated principal and stores it in Spring Security's SecurityContext.
+ * - An explicit local-only switch supplies a configured test principal instead;
+ *   no unsigned token claims are trusted and existing access checks still run.
+ * - Constructor guards fail startup when that switch is used outside the local
+ *   profile or without a loopback bind. Re-enable it to restore signature/expiry checks.
  */
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthFilter.class);
+
+    // Immutable startup configuration; local identity never comes from a request.
+    private final CommerceSecurityProperties securityProperties;
 
     /**
      * Provides RSA public keys from the identity-service JWKS endpoint.
@@ -38,9 +52,27 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     /**
      * Constructor injection: Spring provides the key provider.
      * @param jwksKeyProvider the JwksKeyProvider.
+     * @param securityProperties typed switch and fixed local test identity
+     * @param environment active profiles/bind address used to guard local bypass
      */
-    public JwtAuthFilter(JwksKeyProvider jwksKeyProvider) {
+    public JwtAuthFilter(JwksKeyProvider jwksKeyProvider,
+                         CommerceSecurityProperties securityProperties,
+                         Environment environment) {
         this.jwksKeyProvider = jwksKeyProvider;
+        this.securityProperties = securityProperties;
+        if (!securityProperties.jwtValidationEnabled()) {
+            // Fail startup rather than accidentally expose a token-free service.
+            // A profile alone is insufficient: the server must also bind loopback.
+            boolean localOnly = environment.acceptsProfiles(Profiles.of("local"))
+                    && Arrays.stream(environment.getActiveProfiles()).allMatch("local"::equals);
+            String address = environment.getProperty("server.address", "");
+            if (!localOnly || !("127.0.0.1".equals(address) || "::1".equals(address))) {
+                throw new IllegalStateException(
+                        "JWT validation may be disabled only with the local profile alone and a loopback server.address");
+            }
+            log.warn("Local testing: JWT validation disabled; requests use configured test user {}",
+                    securityProperties.localUserId());
+        }
     }
 
     /**
@@ -57,6 +89,19 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
+
+        if (!securityProperties.jwtValidationEnabled()) {
+            // No token is decoded or trusted. The same server-configured principal
+            // is used for every local request, including one with a stale Bearer
+            // header. Existing HTTP permissions and application owner/org checks
+            // still run; simply using permitAll would leave controllers with null users.
+            AuthenticatedUser user = securityProperties.localUser();
+            var authentication = new UsernamePasswordAuthenticationToken(user, null,
+                    AuthorityUtils.createAuthorityList(user.permissions().toArray(String[]::new)));
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         /**
          * Read the HTTP Authorization header.
