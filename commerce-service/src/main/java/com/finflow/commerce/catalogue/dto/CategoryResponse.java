@@ -7,15 +7,9 @@ import java.io.Serializable;
  * Response DTO containing category details.
  * A record is suitable because this DTO carries response data and does not need mutable fields.
  */
-public record CategoryResponse(
-        Long categoryId, // Database-generated category identifier.
-        Long organisationId, // Organisation that owns the category.
-        String name, // Human-readable category name.
-        String slug // URL-friendly category identifier.
-) implements Serializable {
+public record CategoryResponse(Long categoryId, Long organisationId, String name, String slug) implements Serializable {
 
-    // Boot's default Redis cache serializer uses Java serialization. The immutable
-    // DTO is safe to cache; persisting a JPA entity would also capture proxy state.
+    // Boot's default Redis cache serializer uses Java serialization. The immutable DTO is safe to cache; persisting a JPA entity would also capture proxy state.
     private static final long serialVersionUID = 1L;
 
     /**

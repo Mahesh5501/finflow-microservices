@@ -12,49 +12,41 @@ import java.math.BigDecimal;
  * PRODUCT - Catalogue domain entity and JPA persistence model.
  *
  * BUSINESS RESPONSIBILITY:
- * Represents a product owned by one merchant organisation. It keeps the
- * product's catalogue data and stock state together so business rules such as
- * stock reservation are enforced in one place instead of being scattered
- * across controllers or repositories.
+ * Represents a product owned by one merchant organisation.
+ * It keeps the product's catalogue data and stock state together so business rules such as stock reservation are enforced in one place instead of being scattered across controllers or repositories.
  *
  * CONCEPTS USED:
  * - ORM/JPA: Hibernate maps this Java object to the `products` table.
- * - Encapsulation: fields are private; callers change state through methods
- *   that validate business rules.
+ * - Encapsulation: fields are private; callers change state through methods that validate business rules.
  * - Optimistic locking: `@Version` detects concurrent updates at commit time.
  * - BigDecimal: monetary values avoid floating-point rounding errors.
  *
  * IMPORTANT DESIGN CHOICE:
- * This is both a JPA entity and a domain object (a pragmatic approach for this
- * modular monolith). We are not creating a second copy of Product just to
- * separate persistence from domain state.
+ * This is both a JPA entity and a domain object (a pragmatic approach for this modular monolith).
+ * We are not creating a second copy of Product just to separate persistence from domain state.
  */
-// @Entity makes this class managed by JPA. @Table explicitly selects
-// the database table. Lombok @Getter generates read-only accessors so callers
-// can inspect state without getting unrestricted setters.
+// @Entity makes this class managed by JPA.
+// @Table explicitly selects the database table.
+// Lombok @Getter generates read-only accessors so callers can inspect state without getting unrestricted setters.
 @Entity
 @Table(name = "products")
 @Getter
 // JPA needs a no-argument constructor to hydrate an entity from a row.
-// PROTECTED prevents ordinary application code from creating an invalid,
-// partially initialised Product with `new Product()`.
+// PROTECTED prevents ordinary application code from creating an invalid, partially initialised Product with `new Product()`.
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Product {
 
-    // @Id marks the primary key; @GeneratedValue delegates ID creation to
-    // the database identity/auto-increment mechanism.
+    // @Id marks the primary key; @GeneratedValue delegates ID creation to the database identity/auto-increment mechanism.
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "product_id")
     private Long productId;
 
-    // Every product belongs to a merchant organisation. nullable=false
-    // adds a database NOT NULL constraint as a second line of defence.
+    // Every product belongs to a merchant organisation. nullable=false adds a database NOT NULL constraint as a second line of defence.
     @Column(name = "organisation_id", nullable = false)
     private Long organisationId;
 
-    // Nullable because a merchant may create a product before assigning
-    // it to a category. This stores the category ID without a JPA relationship.
+    // Nullable because a merchant may create a product before assigning it to a category. This stores the category ID without a JPA relationship.
     @Column(name = "category_id")
     private Long categoryId;
 
@@ -62,8 +54,7 @@ public class Product {
     @Column(nullable = false, length = 200)
     private String name;
 
-    // BigDecimal is used for money; precision=19 and scale=4 define the
-    // database numeric capacity and number of digits after the decimal point.
+    // BigDecimal is used for money; precision=19 and scale=4 define the database numeric capacity and number of digits after the decimal point.
     @Column(name = "unit_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal unitPrice;
 
@@ -76,25 +67,16 @@ public class Product {
     @Column(nullable = false, length = 20)
     private ProductStatus status;
 
-    // Optimistic-lock version. Hibernate includes the previous version in
-    // UPDATE statements and increments it on success. If another transaction
-    // updated this row first, the update affects zero rows and a concurrency
-    // conflict is raised instead of silently overwriting newer stock.
+    // Optimistic-lock version. Hibernate includes the previous version in UPDATE statements and increments it on success.
+    // If another transaction updated this row first, the update affects zero rows and a concurrency conflict is raised instead of silently overwriting newer stock.
     @Version
     private Long version;
 
     /**
-     * Creates a valid new product. Validation lives here as well as at the API
-     * boundary so non-HTTP callers cannot bypass core product invariants.
+     * Creates a valid new product. Validation lives here as well as at the API boundary so non-HTTP callers cannot bypass core product invariants.
      * A newly created product starts ACTIVE; stock starts at the supplied value.
      */
-    public Product(
-            Long organisationId,
-            String name,
-            BigDecimal unitPrice,
-            int availableQuantity,
-            Long categoryId
-    ) {
+    public Product(Long organisationId, String name, BigDecimal unitPrice, int availableQuantity, Long categoryId) {
         if (organisationId == null || organisationId <= 0) {
             throw ApiException.badRequest("Organisation ID must be positive");
         }
@@ -133,10 +115,8 @@ public class Product {
     /**
      * Reserves stock for an order.
      *
-     * The method validates the requested quantity, product state, and current
-     * availability before changing the in-memory entity. The caller must save
-     * the entity within a transaction so the database update and @Version
-     * check happen atomically.
+     * The method validates the requested quantity, product state, and current availability before changing the in-memory entity.
+     * The caller must save the entity within a transaction so the database update and @Version check happen atomically.
      */
     public void reserveStock(int quantity) {
         if (quantity <= 0) {
@@ -161,9 +141,8 @@ public class Product {
     }
 
     /**
-     * Returns previously reserved stock when an order is cancelled or a
-     * reservation is otherwise released. Math.addExact protects against
-     * integer overflow, which could otherwise produce a negative stock value.
+     * Returns previously reserved stock when an order is cancelled or a reservation is otherwise released.
+     * Math.addExact protects against integer overflow, which could otherwise produce a negative stock value.
      */
     public void releaseStock(int quantity) {
         if (quantity <= 0) {
@@ -187,8 +166,7 @@ public class Product {
     }
 
     /**
-     * Sets stock to an explicitly supplied quantity. This is an administrative
-     * stock adjustment; order reservation should use reserveStock instead.
+     * Sets stock to an explicitly supplied quantity. This is an administrative stock adjustment; order reservation should use reserveStock instead.
      */
     public void updateAvailableQuantity(int availableQuantity) {
         if (availableQuantity < 0) {
@@ -198,8 +176,7 @@ public class Product {
         this.availableQuantity = availableQuantity;
     }
 
-    // Keep price validation inside the entity so every caller (not only
-    // the REST API) must obey the same positive-price business invariant.
+    // Keep price validation inside the entity so every caller (not only the REST API) must obey the same positive-price business invariant.
     private void validatePrice(BigDecimal unitPrice) {
         if (unitPrice == null || unitPrice.signum() <= 0) {
             throw ApiException.badRequest("Unit price must be positive");

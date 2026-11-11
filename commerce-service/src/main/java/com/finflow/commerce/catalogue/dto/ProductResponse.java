@@ -11,14 +11,14 @@ import java.math.BigDecimal;
  * Includes product details and an optional category name.
  */
 public record ProductResponse(
-        Long productId, // Database-generated product identifier.
-        Long organisationId, // Organisation that owns this product.
-        Long categoryId, // Category identifier, if the product has a category.
-        String categoryName, // Category display name. This can be null when the caller does not supply it.
-        String name, // Product display name.
-        BigDecimal unitPrice, // Current unit selling price.
-        int availableQuantity, // Current available stock.
-        ProductStatus status // Current product lifecycle status.
+        Long productId,
+        Long organisationId,
+        Long categoryId,
+        String categoryName,
+        String name,
+        BigDecimal unitPrice,
+        int availableQuantity,
+        ProductStatus status
 ) {
 
     /**

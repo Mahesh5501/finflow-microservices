@@ -16,29 +16,29 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * MERCHANT-FACING CATEGORY MANAGEMENT API.
  *
- * <p>Purpose: accept merchant category creation requests and delegate the
- * operation to the Catalogue application service. The controller performs
- * HTTP-level concerns only; validation rules and persistence remain outside.</p>
+ * <p>
+ *     Purpose: accept merchant category creation requests and delegate the operation to the Catalogue application service.
+ *     The controller performs HTTP-level concerns only;
+ *     validation rules and persistence remain outside.
+ * </p>
  *
- * <p>@RestController makes this a Spring MVC REST endpoint. @RequestMapping
- * defines the merchant category URL prefix. @PostMapping handles resource
- * creation, while @ResponseStatus(CREATED) returns HTTP 201 on success.
- * @Valid triggers Jakarta Bean Validation on the request DTO before the method
- * executes; @RequestBody deserializes the JSON body. @AuthenticationPrincipal
- * injects the authenticated caller supplied by Spring Security.</p>
+ * <p>
+     * @RestController makes this a Spring MVC REST endpoint.
+     * @RequestMapping defines the merchant category URL prefix.
+     * @PostMapping handles resource creation.
+     * @ResponseStatus(CREATED) returns HTTP 201 on success.
+     * @Valid triggers Jakarta Bean Validation on the request DTO before the method executes;
+     * @RequestBody deserializes the JSON body.
+     * @AuthenticationPrincipal injects the authenticated caller supplied by Spring Security.
+ * </p>
  *
- * <p>Security boundary: user.orgIds() is passed to the application service so
- * category ownership is scoped to the authenticated merchant organisation.
- * Never trust an organisation ID supplied by the request body for this purpose.
- * The service must still enforce the ownership/business rules.</p>
- *
- * <p>Keep this class thin. Adding business logic here would make it harder to
- * reuse the use case from another entry point and harder to test independently.</p>
+ * Security boundary: user.orgIds() is passed to the application service so category ownership is scoped to the authenticated merchant organisation.
+ * Never trust an organisation ID supplied by the request body for this purpose. The service must still enforce the ownership/business rules.
  *
  * Constructor injection supplies CatalogueService as the only business dependency.
- * The global SecurityFilterChain still protects these APIs; "customer-facing" does
- * not mean anonymous. DTO validation and domain errors retain their existing HTTP
- * mapping. Transaction boundaries belong in the application service, not the handler.
+ * The global SecurityFilterChain still protects these APIs;
+ * "customer-facing" does not mean anonymous. DTO validation and domain errors retain their existing HTTP mapping.
+ * Transaction boundaries belong in the application service, not the handler.
  */
 @RestController
 @RequestMapping("/api/v1/merchant/categories")
@@ -53,8 +53,8 @@ public class MerchantCategoryController {
 
     /**
      * Merchant POST validates JSON, supplies trusted orgIds and returns the created DTO.
-     * CatalogueService checks membership and duplicate slug, then saves/evicts its cache
-     * in a write use case. Forbidden membership and CATEGORY_EXISTS retain their errors.
+     * CatalogueService checks membership and duplicate slug, then saves/evicts its cache in a write use case.
+     * Forbidden membership and CATEGORY_EXISTS retain their errors.
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

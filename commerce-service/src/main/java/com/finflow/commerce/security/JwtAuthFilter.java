@@ -30,10 +30,8 @@ import java.util.List;
  * JWT authentication filter.
  * - Runs once per request and checks whether the request contains a valid Bearer access token.
  * - If the token is valid, it creates an authenticated principal and stores it in Spring Security's SecurityContext.
- * - An explicit local-only switch supplies a configured test principal instead;
- *   no unsigned token claims are trusted and existing access checks still run.
- * - Constructor guards fail startup when that switch is used outside the local
- *   profile or without a loopback bind. Re-enable it to restore signature/expiry checks.
+ * - An explicit local-only switch supplies a configured test principal instead; no unsigned token claims are trusted and existing access checks still run.
+ * - Constructor guards fail startup when that switch is used outside the local profile or without a loopback bind. Re-enable it to restore signature/expiry checks.
  */
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
@@ -55,23 +53,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
      * @param securityProperties typed switch and fixed local test identity
      * @param environment active profiles/bind address used to guard local bypass
      */
-    public JwtAuthFilter(JwksKeyProvider jwksKeyProvider,
-                         CommerceSecurityProperties securityProperties,
-                         Environment environment) {
+    public JwtAuthFilter(JwksKeyProvider jwksKeyProvider, CommerceSecurityProperties securityProperties, Environment environment) {
         this.jwksKeyProvider = jwksKeyProvider;
         this.securityProperties = securityProperties;
         if (!securityProperties.jwtValidationEnabled()) {
-            // Fail startup rather than accidentally expose a token-free service.
-            // A profile alone is insufficient: the server must also bind loopback.
-            boolean localOnly = environment.acceptsProfiles(Profiles.of("local"))
-                    && Arrays.stream(environment.getActiveProfiles()).allMatch("local"::equals);
+            // Fail startup rather than accidentally expose a token-free service. A profile alone is insufficient: the server must also bind loopback.
+            boolean localOnly = environment.acceptsProfiles(Profiles.of("local")) && Arrays.stream(environment.getActiveProfiles()).allMatch("local"::equals);
             String address = environment.getProperty("server.address", "");
             if (!localOnly || !("127.0.0.1".equals(address) || "::1".equals(address))) {
-                throw new IllegalStateException(
-                        "JWT validation may be disabled only with the local profile alone and a loopback server.address");
+                throw new IllegalStateException("JWT validation may be disabled only with the local profile alone and a loopback server.address");
             }
-            log.warn("Local testing: JWT validation disabled; requests use configured test user {}",
-                    securityProperties.localUserId());
+            log.warn("Local testing: JWT validation disabled; requests use configured test user {}", securityProperties.localUserId());
         }
     }
 
@@ -84,30 +76,18 @@ public class JwtAuthFilter extends OncePerRequestFilter {
      * @throws IOException if an I/O exception occurs.
      */
     @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain
-    ) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
 
         if (!securityProperties.jwtValidationEnabled()) {
-            // No token is decoded or trusted. The same server-configured principal
-            // is used for every local request, including one with a stale Bearer
-            // header. Existing HTTP permissions and application owner/org checks
-            // still run; simply using permitAll would leave controllers with null users.
+            // No token is decoded or trusted. The same server-configured principal is used for every local request, including one with a stale Bearer header.
+            // Existing HTTP permissions and application owner/org checks still run; simply using permitAll would leave controllers with null users.
             AuthenticatedUser user = securityProperties.localUser();
-            var authentication = new UsernamePasswordAuthenticationToken(user, null,
-                    AuthorityUtils.createAuthorityList(user.permissions().toArray(String[]::new)));
+            var authentication = new UsernamePasswordAuthenticationToken(user, null, AuthorityUtils.createAuthorityList(user.permissions().toArray(String[]::new)));
             SecurityContextHolder.getContext().setAuthentication(authentication);
             filterChain.doFilter(request, response);
             return;
         }
-
-        /**
-         * Read the HTTP Authorization header.
-         * Expected format: Bearer <JWT>.
-         */
-        String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+        String header = request.getHeader(HttpHeaders.AUTHORIZATION); //Read the HTTP Authorization header. Expected format: Bearer <JWT>.
 
         /**
          * Only attempt JWT parsing when the header uses Bearer authentication.
@@ -116,79 +96,31 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
             try {
                 /**
-                 * Remove "Bearer " and keep the actual JWT string.
+                 *
                  */
-                String raw = header.substring(7);
+                String raw = header.substring(7); //Remove "Bearer " and keep the actual JWT string.
 
                 /**
                  * Build the JWT parser.
                  */
                 Claims claims = Jwts.parser()
-
-                        /**
-                         * JJWT calls this locator to find the verification key.
-                         */
+                         // JJWT calls this locator to find the verification key.
                         .keyLocator(new LocatorAdapter<Key>() {
-
                             @Override
                             protected Key locate(JwsHeader header) {
-
-                                /**
-                                 * Find the RSA public key matching the JWT's kid.
-                                 */
-                                return jwksKeyProvider.getKey(
-                                        header.getKeyId()
-                                );
+                                return jwksKeyProvider.getKey(header.getKeyId()); //Find the RSA public key matching the JWT's kid.
                             }
                         })
+                        .build() // Build the parser.
+                        .parseSignedClaims(raw) // Parse and verify the signed JWT. A successful call returns its claims.
+                        .getPayload(); //Extract the JWT payload.
 
-                        /**
-                         * Build the parser.
-                         */
-                        .build()
+                Long userId = Long.valueOf(claims.getSubject()); // The JWT subject (sub) contains the user ID.
+                String email = claims.get("email", String.class); // Extract the email claim.
+                List<String> permissions = stringList(claims.get("permissions")); // Extract permission values from the JWT.
+                List<Long> orgIds = longList(claims.get("orgIds")); // Extract organisation IDs from the JWT.
 
-                        // Parse and verify the signed JWT.
-                        /**
-                         * A successful call returns its claims.
-                         */
-                        .parseSignedClaims(raw)
-
-                        /**
-                         * Extract the JWT payload.
-                         */
-                        .getPayload();
-
-                /**
-                 * The JWT subject (sub) contains the user ID.
-                 */
-                Long userId = Long.valueOf(claims.getSubject());
-
-                /**
-                 * Extract the email claim.
-                 */
-                String email = claims.get("email", String.class);
-
-                /**
-                 * Extract permission values from the JWT.
-                 */
-                List<String> permissions =
-                        stringList(claims.get("permissions"));
-
-                /**
-                 * Extract organisation IDs from the JWT.
-                 */
-                List<Long> orgIds =
-                        longList(claims.get("orgIds"));
-
-                /**
-                 * Build the application-specific authenticated principal.
-                 */
-                var principal = new AuthenticatedUser(
-                        userId,
-                        email,
-                        orgIds,
-                        permissions
-                );
+                var principal = new AuthenticatedUser(userId, email, orgIds, permissions); // Build the application-specific authenticated principal.
 
                 /**
                  * Create a Spring Security authentication object.
@@ -198,49 +130,25 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                  * Credentials: null because JWT authentication is already done.
                  * Authorities: permissions used by Spring Security.
                  */
-                var auth = new UsernamePasswordAuthenticationToken(
-                        principal,
-                        null,
-                        AuthorityUtils.createAuthorityList(
-                                permissions.toArray(String[]::new)
-                        )
-                );
-
-                /**
-                 * Store authentication for the current request.
-                 */
-                /**
-                 * Controllers can now access it through Authentication.
-                 */
-                SecurityContextHolder.getContext()
-                        .setAuthentication(auth);
+                var auth = new UsernamePasswordAuthenticationToken(principal, null, AuthorityUtils.createAuthorityList(permissions.toArray(String[]::new)));
+                SecurityContextHolder.getContext().setAuthentication(auth); // Store authentication for the current request. Controllers can now access it through Authentication.
 
             } catch (Exception ignored) {
-
                 /**
-                 * If token parsing, signature verification, key lookup,
-                 * or claim conversion fails, remove any existing authentication.
+                 * If token parsing, signature verification, key lookup, or claim conversion fails, remove any existing authentication.
                  * The request continues through the filter chain.
-                 * Protected endpoints will subsequently be rejected
-                 * by Spring Security because the caller is unauthenticated.
+                 * Protected endpoints will subsequently be rejected by Spring Security because the caller is unauthenticated.
                  */
                 SecurityContextHolder.clearContext();
             }
         }
-
-        /**
-         * Continue executing the remaining filters and eventually
-         * the controller, if security authorises the request.
-         */
+        // Continue executing the remaining filters and eventually the controller, if security authorises the request.
         filterChain.doFilter(request, response);
     }
 
     /**
      * Converts a collection of permission claim values into strings.
-     *
-     * @param raw the raw claim.
-     * If the claim is missing or is not a collection,
-     * returns an empty list.
+     * @param raw the raw claim. If the claim is missing or is not a collection, returns an empty list.
      */
     private static List<String> stringList(Object raw) {
 
@@ -253,12 +161,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         return List.of();
     }
 
-    /**
-     * Converts a collection of organisation IDs into Long values.
-     *
-     * If the claim is missing or is not a collection,
-     * returns an empty list.
-     */
+    // Converts a collection of organisation IDs into Long values. If the claim is missing or is not a collection, returns an empty list.
     private static List<Long> longList(Object raw) {
 
         if (raw instanceof Collection<?> c) {
