@@ -13,6 +13,14 @@ Defaults: `commerceBaseUrl=http://127.0.0.1:18083`, `commerceMode=local`, `comme
 
 The scripts supply the configured organisation at request scope, so a blank/stale shared `orgId` cannot break local merchant JSON. Local mode sends no Authorization header. Captured IDs use `commerce...` collection variables and do not overwrite shared Identity/Wallet environment values.
 
+## Sending requests individually
+
+Category listing, product search and customer order listing can be sent before any setup; an empty database is valid. Category filtering is omitted from search when commerceCategoryId is blank. Listing an order's returns needs commerceOrderId, but does not require an existing return ID.
+
+All **29 variables** are declared/described in the collection Variables tab. Connection/mode/local identity defaults are ready to use. Captured IDs and generated keys start blank; this means "not created yet", not "missing from the collection". For a resource-specific URL, enter its existing ID in the relevant collection variable or send the matching create request. Coupon creation generates a code if needed and does not require a product. New order/checkout keys are generated automatically; replay keeps its key.
+
+In local mode, orgId/userId/accessToken are integrated-mode inputs and can stay blank: the scripts derive the current caller/organisation from commerceLocalUserId=1 and commerceLocalOrgId=10. Setup clears old fixture values without deleting their variable declarations. With known fixture IDs, list/search assertions still verify those fixtures; without them, the requests validate their general response shape.
+
 ## Scenarios
 
 | Folder | Purpose / prerequisite |
@@ -63,3 +71,9 @@ Standalone settings are now embedded in the collection; the duplicate environmen
 - Wallet-mode simulation skip check: **zero HTTP requests**, zero failures.
 - Static comparison: every generated method/path matches current controllers; all 30 are covered. JSON bodies/idempotency headers and 91 script blocks checked. Repeated generation produces identical files; other service generator functions/collections/shared environment were preserved.
 - Reports: `../target/commerce-postman-report-1.json`, `commerce-postman-report-2.json`, `commerce-postman-wallet-skip.json`. Target artifacts can be removed by a clean build.
+
+### Manual-request regression - 2026-11-11
+
+- Fixed an incorrect pre-request requirement: GET /api/v1/customer/categories never needed commerceCategoryId. Removed corresponding non-API prerequisites from search/order listing, and corrected return-list prerequisites to require the order ID only. Preserved fixture assertions when their IDs are available.
+- Isolated Newman run with **No Environment** and all generated IDs blank: categories/search/order listing passed **3 requests, 9 assertions**. Then the full collection passed **48 requests, 204 assertions**, zero failures. Used temporary H2/local mode on port 18093 and stopped that process afterward; development service/database untouched. No Java API/config changes.
+- Reports: target/commerce-postman-manual-empty-ids.json and target/commerce-postman-manual-full.json under commerce-service. Earlier 200-assertion results describe the previous collection version.

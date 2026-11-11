@@ -2,7 +2,15 @@
 
 Last assessed: **2026-11-11 (Asia/Calcutta)**; this update covers commerce-service only.
 
-## Latest progress checkpoint - 2026-11-11 (single-file Commerce collection)
+## Latest progress checkpoint - 2026-11-11 (Postman individual requests and visible variables)
+
+- **Reported error:** GET /api/v1/customer/categories failed in Postman's pre-request script with Missing commerceCategoryId, before any HTTP request. Removed that incorrect fixture prerequisite; category listing is independent. Product search now omits an empty optional category filter and accepts empty pages; customer order listing needs no created order; return listing requires only its order ID. Fixture presence checks still run when IDs are available. Coupon creation no longer requires a product and can generate its code.
+- **Variables:** all 29 config/generated variables are now explicitly declared with descriptions, including all 20 URL/body placeholders, captured IDs and generated keys. Empty IDs are intentional until supplied/created. Fixture reset clears values instead of unsetting declarations; ID-dependent requests explain manual entry or create-first alternatives. Single-file collection and secure backend settings preserved.
+- **Changes:** postman/_commerce_collection.py, regenerated Commerce collection and Postman guide only. No Java/API/config/schema or other-service change. User's running development instance/data were not modified.
+- **Verification within authorized Postman scope:** Newman 6.2.1, separate H2/local instance on port 18093, No Environment: three reads before setup passed **3 requests/9 assertions**; full scenario run passed **48 requests/204 assertions**, zero failures. Checked that every URL/body placeholder is declared and all variables described; temporary process stopped. Reports/logs: commerce-service/target/commerce-postman-manual-{empty-ids,full}.{json,log}, postman-manual-app.log. Earlier 200-assertion results are historical. No Maven unit rerun since Java was unchanged; no real MySQL/Redis/Wallet/Identity validation.
+- **Next:** re-import/replace the updated collection and select No Environment. GET categories can be sent immediately; use Variables or create requests for endpoints whose URLs need a resource ID. Backend local profile is still required for token-free API calls, separate from this pre-request-script fix.
+
+## Previous progress checkpoint - 2026-11-11 (single-file Commerce collection)
 
 - User requested one import file. Removed the duplicate FinFlow-Commerce-Standalone environment after confirming all five values already exist in collection Variables. Updated both generator modules so --commerce-only emits only the Commerce collection; shared environment/other service collections preserved.
 - Standalone usage: import Commerce collection, select No Environment, run with server local profile. Defaults are localhost/127.0.0.1 port 18083, mode local, simulated provider, user 1/org 10; edit the collection Variables tab if needed. Existing integrated mode still accepts the shared Identity environment.
@@ -373,6 +381,8 @@ These summaries reuse the initial assessment; no service was re-analysed or chan
 - Next: scoped idempotency/request matching regressions with commerce. No application files changed in setup.
 
 ### commerce-service
+
+- **Latest Postman fix:** individual category/search/order-list requests no longer require created fixtures; all 29 variables are visible/described and reset without deletion. Fresh no-environment checks passed 3 requests/9 assertions before setup, then 48 requests/204 assertions for the full collection on isolated H2. Re-import the collection; Java/server settings unchanged.
 
 - **Postman 2026-11-11:** current collection/generator synchronized: 48 asserted requests cover all 30 routes, standalone defaults embedded in collection Variables, local/integrated mode and independent legal scenarios. Two isolated same-H2-database Newman runs passed 48 requests/200 assertions each; Wallet-mode simulation skips sent zero requests. Other services/shared environment and application code preserved. See latest checkpoint and commerce-service/postman/README.md.
 

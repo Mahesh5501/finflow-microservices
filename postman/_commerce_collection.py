@@ -78,7 +78,7 @@ def request(name, method, path, *, body=None, checks="", status=200,
             prerequisites.append(key)
     if prerequisites:
         before += "\n" + "\n".join(
-            f"if (!pm.variables.get('{variable}')) throw new Error('Missing {variable}; run fixture/scenario setup first');"
+            f"if (!pm.variables.get('{variable}')) throw new Error('Missing {variable}; set it in collection Variables or run its create request first');"
             for variable in prerequisites
         )
     codes = list(status) if isinstance(status, tuple) else [status]
@@ -163,7 +163,7 @@ pm.collectionVariables.set('commerceCouponCode', 'SAVE' + run.toUpperCase());
 for (const key of ['commerceCategoryId', 'commerceProductId', 'commerceOrderId', 'commerceCheckoutOrderId',
     'commerceSelectedSellerOrderId', 'commerceCancelOrderId', 'commerceApprovedReturnId',
     'commerceRejectedOrderId', 'commerceRejectedReturnId', 'commerceUncertainOrderId', 'commerceDeclinedOrderId']) {
-    pm.collectionVariables.unset(key);
+    pm.collectionVariables.set(key, '');
 }
 """
     cart_item = {"productId": "{{commerceProductId}}", "quantity": 1}
@@ -202,11 +202,16 @@ if (pm.variables.get('commerceMode') === 'local') {
                 body={"organisationId": "{{orgId}}", "name": "Postman Electronics", "slug": "electronics-{{commerceRunId}}"},
                 checks="pm.test('Category belongs to the seller', function () { pm.expect(body.organisationId).to.eql(Number(pm.variables.get('orgId'))); });",
                 save=("categoryId", "commerceCategoryId")),
-        request("List marketplace categories", "GET", "/customer/categories", requires=("commerceCategoryId",), checks="""
-pm.test('Created category is listed', function () {
+        request("List marketplace categories", "GET", "/customer/categories", checks="""
+pm.test('Categories response is an array', function () {
     pm.expect(body).to.be.an('array');
-    pm.expect(body.some(c => c.categoryId === Number(pm.variables.get('commerceCategoryId')))).to.eql(true);
-});"""),
+});
+const categoryId = pm.variables.get('commerceCategoryId');
+if (categoryId) {
+    pm.test('Created category is listed', function () {
+        pm.expect(body.some(c => c.categoryId === Number(categoryId))).to.eql(true);
+    });
+}"""),
         request("Create product", "POST", "/merchant/products", status=201, requires=("commerceCategoryId",),
                 body={"organisationId": "{{orgId}}", "name": "Postman Laptop {{commerceRunId}}", "unitPrice": "120.00",
                       "availableQuantity": 100, "categoryId": "{{commerceCategoryId}}"},
@@ -215,18 +220,24 @@ pm.test('Created category is listed', function () {
                 requires=("commerceProductId",), checks=product_checks),
         request("Search by name and category with pagination", "GET",
                 "/customer/products/search?q=Laptop&categoryId={{commerceCategoryId}}&page=0&size=20",
-                requires=("commerceCategoryId", "commerceProductId"), checks="""
-pm.test('Paged search contains the created product', function () {
+                before="if (!pm.variables.get('commerceCategoryId')) pm.request.url.query.remove('categoryId');", checks="""
+pm.test('Search returns a valid page, including empty results', function () {
     pm.expect(body.content).to.be.an('array');
-    pm.expect(body.content.some(p => p.productId === Number(pm.variables.get('commerceProductId')))).to.eql(true);
-    pm.expect(body.totalElements).to.be.at.least(1);
-});"""),
+    pm.expect(body.totalElements).to.be.at.least(0);
+});
+const productId = pm.variables.get('commerceProductId');
+if (productId) {
+    pm.test('Paged search contains the created product', function () {
+        pm.expect(body.content.some(p => p.productId === Number(productId))).to.eql(true);
+        pm.expect(body.totalElements).to.be.at.least(1);
+    });
+}"""),
         request("Update price and stock", "PATCH", "/merchant/products/{{commerceProductId}}",
                 requires=("commerceProductId",), body={"unitPrice": "100.00", "availableQuantity": 100},
                 checks=product_checks + "pm.test('Updated price and stock', function () { pm.expect(Number(body.unitPrice)).to.eql(100); pm.expect(body.availableQuantity).to.eql(100); });"),
         request("Create unique 10 percent coupon", "POST", "/merchant/coupons", status=201,
                 body={"organisationId": "{{orgId}}", "code": "{{commerceCouponCode}}", "percentOff": "10.00", "expiresAt": None},
-                requires=("commerceProductId",), checks="""
+                before="if (!pm.variables.get('commerceCouponCode')) pm.collectionVariables.set('commerceCouponCode', 'SAVE' + pm.variables.replaceIn('{{$guid}}').replace(/-/g, '').toUpperCase());", checks="""
 pm.test('Coupon is active and correctly priced', function () {
     pm.expect(body.code).to.eql(pm.variables.get('commerceCouponCode'));
     pm.expect(Number(body.percentOff)).to.eql(10);
@@ -259,7 +270,14 @@ pm.test('Coupon is active and correctly priced', function () {
         create_order("Create confirmed order", "commerceOrderId"),
         request("Replay exact order with same key", "POST", "/customer/orders", body=order_body(), status=201,
                 requires=("commerceOrderId",), key="commerceOrderIdKey", checks=order_checks() + "pm.test('Replay returns original order', function () { pm.expect(body.orderId).to.eql(Number(pm.variables.get('commerceOrderId'))); });"),
-        request("List own customer orders", "GET", "/customer/orders", requires=("commerceOrderId",), checks="pm.test('Own order is listed', function () { pm.expect(body).to.be.an('array'); pm.expect(body.some(o => o.orderId === Number(pm.variables.get('commerceOrderId')))).to.eql(true); });"),
+        request("List own customer orders", "GET", "/customer/orders", checks="""
+pm.test('Orders response is an array', function () { pm.expect(body).to.be.an('array'); });
+const orderId = pm.variables.get('commerceOrderId');
+if (orderId) {
+    pm.test('Own order is listed', function () {
+        pm.expect(body.some(o => o.orderId === Number(orderId))).to.eql(true);
+    });
+}"""),
         request("Get own order", "GET", "/customer/orders/{{commerceOrderId}}", requires=("commerceOrderId",), checks=order_checks()),
         request("List merchant organisation orders", "GET", "/merchant/orders?organisationId={{orgId}}&mineOnly=false", checks="pm.test('Merchant list is an array', function () { pm.expect(body).to.be.an('array'); });"),
         request("List merchant customer's orders", "GET", "/merchant/orders?organisationId={{orgId}}&mineOnly=true", checks="pm.test('Filtered merchant list is an array', function () { pm.expect(body).to.be.an('array'); });"),
@@ -280,8 +298,14 @@ pm.test('Coupon is active and correctly priced', function () {
         request("Complete fulfilment", "POST", "/merchant/orders/{{commerceOrderId}}/fulfilment/complete",
                 requires=("commerceOrderId",), checks=state_check("FULFILLED")),
         return_request("Customer requests return", "commerceOrderId", "commerceApprovedReturnId"),
-        request("List order returns", "GET", "/customer/orders/{{commerceOrderId}}/returns", requires=("commerceApprovedReturnId",),
-                checks="pm.test('Created return is listed', function () { pm.expect(body).to.be.an('array'); pm.expect(body.some(r => r.returnId === Number(pm.variables.get('commerceApprovedReturnId')))).to.eql(true); });"),
+        request("List order returns", "GET", "/customer/orders/{{commerceOrderId}}/returns", requires=("commerceOrderId",), checks="""
+pm.test('Returns response is an array', function () { pm.expect(body).to.be.an('array'); });
+const returnId = pm.variables.get('commerceApprovedReturnId');
+if (returnId) {
+    pm.test('Created return is listed', function () {
+        pm.expect(body.some(r => r.returnId === Number(returnId))).to.eql(true);
+    });
+}"""),
         request("Merchant approves return", "POST", "/merchant/returns/{{commerceApprovedReturnId}}/approve",
                 requires=("commerceApprovedReturnId",), checks=state_check("APPROVED")),
         request("Complete approved return and refund", "POST", "/merchant/returns/{{commerceApprovedReturnId}}/complete",
@@ -319,6 +343,37 @@ if (String(pm.variables.get('commercePaymentProvider')).toLowerCase() !== 'simul
         "commercePaymentProvider": "simulated", "commerceLocalUserId": "1", "commerceLocalOrgId": "10",
         "accessToken": "", "userId": "", "orgId": "",
     }
+    # Declare generated values too: Postman's Variables tab must show every ID/key
+    # before any request has run. Empty means "not created yet", never a fake ID.
+    generated = (
+        "commerceRunId", "commerceCouponCode", "commerceExpectedUserId",
+        "commerceCategoryId", "commerceProductId", "commerceOrderId",
+        "commerceCheckoutOrderId", "commerceSelectedSellerOrderId", "commerceCancelOrderId",
+        "commerceApprovedReturnId", "commerceRejectedOrderId", "commerceRejectedReturnId",
+        "commerceUncertainOrderId", "commerceDeclinedOrderId", "commerceCheckoutKey",
+        "commerceSelectedSellerKey", "commerceOrderIdKey", "commerceCancelOrderIdKey",
+        "commerceRejectedOrderIdKey", "commerceUncertainOrderIdKey", "commerceDeclinedOrderIdKey",
+    )
+    variables.update({key: "" for key in generated})
+    descriptions = {
+        "commerceBaseUrl": "Address of the running Commerce service.",
+        "commerceMode": "local: no token; integrated: use Identity credentials.",
+        "commercePaymentProvider": "simulated or wallet; must match the server configuration.",
+        "commerceLocalUserId": "Fixed local caller; defaults to server test user 1.",
+        "commerceLocalOrgId": "Fixed local organisation; defaults to server test organisation 10.",
+        "accessToken": "Integrated mode only. Leave empty for local mode.",
+        "userId": "Integrated mode only. Local caller comes from commerceLocalUserId.",
+        "orgId": "Integrated mode only. In local mode this is derived per request from commerceLocalOrgId.",
+    }
+    for key in generated:
+        descriptions[key] = (
+            "Generated automatically when sending a new order/checkout. Replay keeps its original key."
+            if key.endswith('Key') else
+            "Captured/generated automatically by setup requests. For an individual request, enter the relevant existing ID/value here."
+        )
+    descriptions['commerceRunId'] = 'Generated by Create unique category to keep fixtures unique between runs.'
+    descriptions['commerceCouponCode'] = 'Generated by setup or Create unique coupon; enter a code here to use an existing coupon.'
+    descriptions['commerceExpectedUserId'] = 'Derived per request from the local fixture or integrated userId; no manual entry needed.'
     return {
         "info": {"_postman_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
                  "name": "FinFlow - Commerce Service",
@@ -333,7 +388,7 @@ if (String(pm.variables.get('commercePaymentProvider')).toLowerCase() !== 'simul
                  "Expected 409 cases are explicit; health can report 503/DOWN without violating its contract. "
                  "Only simulated outcome cases are skipped in wallet mode. No automatic production-service startup."},
         "auth": {"type": "noauth"},
-        "variable": [{"key": key, "value": value} for key, value in variables.items()],
+        "variable": [{"key": key, "value": value, "description": descriptions[key]} for key, value in variables.items()],
         "event": [event("prerequest", PRE_REQUEST), event("test", RESPONSE_PRINCIPAL)],
         "item": [health, fixtures, cart, selected_seller, orders, cancellation, returns, rejection, outcomes],
     }
