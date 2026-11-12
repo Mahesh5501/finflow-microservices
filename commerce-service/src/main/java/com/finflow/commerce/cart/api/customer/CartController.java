@@ -25,18 +25,15 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Feature API layer for customer cart CRUD and one-seller checkout. Called by Spring MVC after the
- * SecurityFilterChain authenticates/authorizes; constructor injection supplies CartService.
- * Flow: bind HTTP/validate DTO -> extract caller -> application use case -> map domain
- * inside service -> CartResponse or OrderResponse -> JSON. No repository or money logic belongs here.
+ * Feature API layer for customer cart CRUD and one-seller checkout. Called by Spring MVC after the SecurityFilterChain authenticates/authorizes; constructor injection supplies CartService.
+ * Flow: bind HTTP/validate DTO -> extract caller -> application use case -> map domain inside service -> CartResponse or OrderResponse -> JSON. No repository or money logic belongs here.
  *
  * @RestController combines component discovery and response-body serialization;
  * without it (or @Controller plus @ResponseBody) these JSON handlers are not registered.
  * @RequestMapping and verb mappings preserve the existing audience-specific routes.
- * @Valid on request bodies triggers Jakarta constraints before delegation; without it
- * DTO constraints do not run here. @AuthenticationPrincipal reads the trusted user
- * from SecurityContext; removing it loses this argument resolution. Owner/seller checks
- * still belong in the application layer so non-HTTP callers cannot bypass them.
+ * @Valid on request bodies triggers Jakarta constraints before delegation; without it DTO constraints do not run here. 
+ * @AuthenticationPrincipal reads the trusted user from SecurityContext; removing it loses this argument resolution. 
+ * Owner/seller checks still belong in the application layer so non-HTTP callers cannot bypass them.
  * @ResponseStatus on creation selects 201; other methods keep their existing status.
  * Transactions are owned by services; HTTP must not hold one across a wallet call.
  */

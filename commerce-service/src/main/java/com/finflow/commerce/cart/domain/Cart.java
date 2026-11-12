@@ -20,13 +20,13 @@ import java.util.Optional;
 /**
  * Cart domain aggregate, persisted by CartRepository and changed by CartService.
  * One row represents one customer/seller bucket; the API merges buckets into one view.
- * Cart owns item association updates and activity time, while product stock is reserved
- * later by placement. @Entity enables ORM discovery; @Table preserves carts and the
- * user/seller unique key. Removing @Entity loses repository mapping; omitting @Table
- * would rely on implicit naming and lose the explicit unique constraint definition.
- * @Id identifies rows; IDENTITY delegates inserts to MySQL auto-increment (sequences
- * are an alternative for databases supporting them). @Version detects conflicting
- * updates rather than blocking readers; removing it permits last-writer-wins updates.
+ * Cart owns item association updates and activity time, while product stock is reserved later by placement. 
+ * @Entity enables ORM discovery; 
+ * @Table preserves carts and the user/seller unique key. 
+ * Removing @Entity loses repository mapping; 
+ * omitting @Table would rely on implicit naming and lose the explicit unique constraint definition.
+ * @Id identifies rows; IDENTITY delegates inserts to MySQL auto-increment (sequences are an alternative for databases supporting them). 
+ * @Version detects conflicting updates rather than blocking readers; removing it permits last-writer-wins updates.
  * Pessimistic locking is an alternative for contested rows, with blocking/deadlock cost.
  * Cascade/orphan removal makes deleting lines persist through this aggregate.
  */
@@ -41,48 +41,36 @@ import java.util.Optional;
 )
 public class Cart {
 
-    // Database-generated primary key.
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "cart_id")
-    private Long cartId;
+    private Long cartId; // Database-generated primary key.
 
-    // The customer who owns this cart.
     @Column(name = "customer_user_id", nullable = false)
-    private Long customerUserId;
+    private Long customerUserId; // The customer who owns this cart.
 
-    // Organisation or tenant to which this cart belongs.
     @Column(name = "organisation_id", nullable = false)
-    private Long organisationId;
+    private Long organisationId; // Organisation or tenant to which this cart belongs.
 
-    // Updated whenever a cart operation changes its contents.
     @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
+    private Instant updatedAt; // Updated whenever a cart operation changes its contents.
 
-    // JPA optimistic-locking version.
-    // Hibernate uses this to detect conflicting updates.
     @Version
-    private Long version;
+    private Long version; // JPA optimistic-locking version. Hibernate uses this to detect conflicting updates.
 
-    // One cart can contain multiple items.
-    // Cart owns the lifecycle of its CartItem children.
     @OneToMany(mappedBy = "cart", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<CartItem> items = new ArrayList<>();
+    private List<CartItem> items = new ArrayList<>(); // One cart can contain multiple items. Cart owns the lifecycle of its CartItem children.
 
-    // Required by JPA when loading an existing entity.
-    protected Cart() {
+    protected Cart() { // Required by JPA when loading an existing entity.
     }
 
-    // Application constructor used when creating a new cart.
-    public Cart(Long customerUserId, Long organisationId) {
+    public Cart(Long customerUserId, Long organisationId) { // Application constructor used when creating a new cart.
         this.customerUserId = customerUserId;
         this.organisationId = organisationId;
         this.updatedAt = Instant.now();
     }
 
-    // Sets the requested quantity for a product.
-    // If quantity is zero or negative, the item is removed.
-    public void upsertItem(Long productId, int quantity) {
+    public void upsertItem(Long productId, int quantity) { // Sets the requested quantity for a product. If quantity is zero or negative, the item is removed.
         if (quantity <= 0) {
             removeItem(productId);
             return;

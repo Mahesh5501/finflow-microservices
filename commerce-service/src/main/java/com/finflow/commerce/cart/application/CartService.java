@@ -294,8 +294,7 @@ public class CartService {
 
     /**
      * Maps all owner buckets to DTOs while items are attached, summing current prices.
-     * Missing products retain the existing Unknown/zero-price fallback. This per-line
-     * lookup is an N+1 optimization opportunity, not an immutable checkout price.
+     * Missing products retain the existing Unknown/zero-price fallback. This per-line lookup is an N+1 optimization opportunity, not an immutable checkout price.
      */
     private CartResponse toUnifiedResponse(Long customerUserId) {
         List<Cart> carts = cartRepository.findByCustomerUserId(customerUserId);
