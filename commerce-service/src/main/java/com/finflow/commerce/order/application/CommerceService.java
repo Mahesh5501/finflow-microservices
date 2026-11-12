@@ -117,8 +117,8 @@ public class CommerceService {
             CreateOrderRequest request
     ) {
 
-        Long sellerOrganisationId = resolveSellerFromItems(
-                request.organisationId(),
+        Long sellerId = resolveSellerFromItems(
+                request.sellerId(),
                 request.items()
         );
 
@@ -126,7 +126,7 @@ public class CommerceService {
                 customerUserId,
                 callerOrgIds,
                 idempotencyKey,
-                sellerOrganisationId,
+                sellerId,
                 request.items(),
                 request.shippingAddress(),
                 request.couponCode(),
@@ -206,23 +206,36 @@ public class CommerceService {
      * true  -> only orders belonging to the current customer.
      * false -> all orders belonging to the organisation.
      */
+    /**
+     * Merchant order list without an {@code organisationId} query param — seller is resolved from JWT.
+     */
+    @Transactional(readOnly = true)
+    public List<OrderResponse> listSellerOrders(
+            Long callerUserId,
+            List<Long> callerOrgIds,
+            boolean mineOnly
+    ) {
+        Long sellerId = com.finflow.commerce.seller.MerchantSellerAccess.requireSellerId(callerOrgIds);
+        return listOrders(sellerId, callerUserId, callerOrgIds, mineOnly);
+    }
+
     @Transactional(readOnly = true)
     public List<OrderResponse> listOrders(
-            Long organisationId,
+            Long sellerId,
             Long callerUserId,
             List<Long> callerOrgIds,
             boolean mineOnly
     ) {
 
-        requireOrgAccess(callerOrgIds, organisationId);
+        requireOrgAccess(callerOrgIds, sellerId);
 
         List<CommerceOrder> orders = mineOnly
                 ? orderRepository.findByOrganisationIdAndCustomerUserIdOrderByCreatedAtDesc(
-                organisationId,
+                sellerId,
                 callerUserId
         )
                 : orderRepository.findByOrganisationIdOrderByCreatedAtDesc(
-                organisationId
+                sellerId
         );
 
         // Convert each entity into an API response DTO.

@@ -59,7 +59,7 @@ class ReservationExpiryServiceTest {
     @Test
     void expireStale_releasesStockAndMarksExpired() {
         ProductResponse product = catalogueService.createProduct(
-                ORGS, new ProductRequest(10L, "TTL Item", new BigDecimal("10.00"), 5, null)
+                ORGS, new ProductRequest("TTL Item", new BigDecimal("10.00"), 5, null)
         );
 
         OrderResponse order = commerceService.createOrder(
@@ -89,9 +89,9 @@ class ReservationExpiryServiceTest {
     @Test
     void purgeAbandonedCarts_removesStaleCarts() {
         ProductResponse product = catalogueService.createProduct(
-                ORGS, new ProductRequest(10L, "Cart Dust", new BigDecimal("8.00"), 4, null)
+                ORGS, new ProductRequest("Cart Dust", new BigDecimal("8.00"), 4, null)
         );
-        cartService.addItem(77L, ORGS, new CartItemRequest(product.productId(), 1));
+        cartService.addItem(77L, new CartItemRequest(product.productId(), 1));
         assertTrue(cartRepository.findByCustomerUserIdAndOrganisationId(77L, 10L).isPresent());
 
         int purged = abandonedCartCleanupService.purgeAbandonedCarts(Instant.now().plus(1, ChronoUnit.HOURS));

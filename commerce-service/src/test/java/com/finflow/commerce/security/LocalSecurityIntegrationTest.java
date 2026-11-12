@@ -41,17 +41,14 @@ class LocalSecurityIntegrationTest {
     @Test
     void merchantOrganisationChecksRemainEnabledInLocalMode() throws Exception {
         mvc.perform(post("/api/v1/merchant/coupons").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"organisationId\":20,\"code\":\"FOREIGN\",\"percentOff\":10}"))
-                .andExpect(status().isForbidden());
-        mvc.perform(post("/api/v1/merchant/coupons").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"organisationId\":10,\"code\":\"" + UUID.randomUUID() + "\",\"percentOff\":10}"))
+                        .content("{\"code\":\"" + UUID.randomUUID() + "\",\"percentOff\":10}"))
                 .andExpect(status().isCreated());
     }
 
     @Test
     void localCartCheckoutConfirmsWithoutIdentityWalletOrInventedReferences() throws Exception {
         String created = mvc.perform(post("/api/v1/merchant/products").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"organisationId\":10,\"name\":\"Local item\",\"unitPrice\":25,\"availableQuantity\":5}"))
+                        .content("{\"name\":\"Local item\",\"unitPrice\":25,\"availableQuantity\":5}"))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         long productId = mapper.readTree(created).path("productId").asLong();
         mvc.perform(delete("/api/v1/customer/carts")).andExpect(status().isOk());
@@ -61,12 +58,12 @@ class LocalSecurityIntegrationTest {
         String response = mvc.perform(post("/api/v1/customer/carts/checkout")
                         .header("Idempotency-Key", UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"shippingAddress\":{\"line1\":\"1 Test Road\",\"city\":\"Hyderabad\",\"postalCode\":\"500001\",\"country\":\"IN\"}}"))
-                .andExpect(status().isCreated()).andExpect(jsonPath("status").value("CONFIRMED"))
-                .andExpect(jsonPath("customerUserId").value(1))
-                .andExpect(jsonPath("paymentWalletId").isEmpty())
-                .andExpect(jsonPath("paymentTransactionId").isEmpty())
+                .andExpect(status().isCreated()).andExpect(jsonPath("orders[0].status").value("CONFIRMED"))
+                .andExpect(jsonPath("orders[0].customerUserId").value(1))
+                .andExpect(jsonPath("orders[0].paymentWalletId").isEmpty())
+                .andExpect(jsonPath("orders[0].paymentTransactionId").isEmpty())
                 .andReturn().getResponse().getContentAsString();
-        JsonNode order = mapper.readTree(response);
+        JsonNode order = mapper.readTree(response).path("orders").get(0);
         long orderId = order.path("orderId").asLong();
         mvc.perform(get("/api/v1/customer/products/" + productId))
                 .andExpect(status().isOk()).andExpect(jsonPath("availableQuantity").value(3));

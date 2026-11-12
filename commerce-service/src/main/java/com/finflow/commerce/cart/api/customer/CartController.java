@@ -4,7 +4,7 @@ import com.finflow.commerce.cart.dto.CartItemRequest;
 import com.finflow.commerce.cart.dto.CartResponse;
 import com.finflow.commerce.cart.dto.UpdateCartItemRequest;
 import com.finflow.commerce.order.dto.CheckoutRequest;
-import com.finflow.commerce.order.dto.OrderResponse;
+import com.finflow.commerce.order.dto.CheckoutResponse;
 import com.finflow.commerce.cart.application.CartService;
 import com.finflow.commerce.security.AuthenticatedUser;
 import jakarta.validation.Valid;
@@ -20,22 +20,29 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Feature API layer for customer cart CRUD and one-seller checkout. Called by Spring MVC after the SecurityFilterChain authenticates/authorizes; constructor injection supplies CartService.
- * Flow: bind HTTP/validate DTO -> extract caller -> application use case -> map domain inside service -> CartResponse or OrderResponse -> JSON. No repository or money logic belongs here.
+ * Feature API layer for customer cart CRUD and marketplace checkout. Called by Spring MVC after
+ * the SecurityFilterChain authenticates/authorizes; constructor injection supplies CartService.
  *
- * @RestController combines component discovery and response-body serialization;
- * without it (or @Controller plus @ResponseBody) these JSON handlers are not registered.
- * @RequestMapping and verb mappings preserve the existing audience-specific routes.
- * @Valid on request bodies triggers Jakarta constraints before delegation; without it DTO constraints do not run here. 
- * @AuthenticationPrincipal reads the trusted user from SecurityContext; removing it loses this argument resolution. 
+ * <p>Flow: bind HTTP/validate DTO → extract caller → application use case → map domain inside
+ * service → {@link CartResponse} or {@link CheckoutResponse} → JSON. No repository or money
+ * logic belongs here.</p>
+ *
+ * <p>Marketplace rules: shoppers identify by login only — no {@code organisationId} or
+ * {@code sellerId} on customer cart requests. Seller ownership is derived from each
+ * {@link com.finflow.commerce.catalogue.domain.Product} when lines are added.</p>
+ *
+ * <p>{@code @RestController} combines component discovery and response-body serialization;
+ * without it (or {@code @Controller} plus {@code @ResponseBody}) these JSON handlers are not
+ * registered. {@code @RequestMapping} and verb mappings preserve the customer cart routes.
+ * {@code @Valid} on request bodies triggers Jakarta constraints before delegation.
+ * {@code @AuthenticationPrincipal} reads the trusted user from SecurityContext.
  * Owner/seller checks still belong in the application layer so non-HTTP callers cannot bypass them.
- * @ResponseStatus on creation selects 201; other methods keep their existing status.
- * Transactions are owned by services; HTTP must not hold one across a wallet call.
+ * {@code @ResponseStatus} on checkout selects 201. Transactions are owned by services; HTTP must not
+ * hold one across a wallet call.</p>
  */
 @RestController
 @RequestMapping("/api/v1/customer/carts")
@@ -65,7 +72,7 @@ public class CartController {
             @Valid @RequestBody CartItemRequest request,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return cartService.addItem(user.userId(), user.orgIds(), request);
+        return cartService.addItem(user.userId(), request);
     }
 
     /**
@@ -78,52 +85,50 @@ public class CartController {
             @Valid @RequestBody UpdateCartItemRequest request,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return cartService.upsertItem(user.userId(), user.orgIds(), productId, request);
+        return cartService.upsertItem(user.userId(), productId, request);
     }
 
     /**
      * Customer DELETE delegates owner and product ID; CartService resolves the stored seller
-     * and removes that owner's line. Missing carts remain a no-op, missing products return 404.
+     * and removes that owner's line. Missing carts remain a no-op; missing products return 404.
      */
     @DeleteMapping("/items/{productId}")
     public CartResponse removeItem(
             @PathVariable Long productId,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return cartService.removeItem(user.userId(), user.orgIds(), productId);
+        return cartService.removeItem(user.userId(), productId);
     }
 
     /**
-     * Customer DELETE clears this principal's seller buckets through CartService.
+     * Customer DELETE clears every seller bucket for this authenticated user.
      * The HTTP caller cannot supply another customer ID to this operation.
      */
     @DeleteMapping
     public CartResponse clear(@AuthenticationPrincipal AuthenticatedUser user) {
-        return cartService.clear(user.userId(), user.orgIds());
+        return cartService.clear(user.userId());
     }
 
     /**
-     * Customer checkout forwards the stable key, optional seller selector, address and bearer
-     * header to CartService. Snapshot and clear use separate transactions around the order
-     * workflow; empty/multi-seller selection errors happen there, and 201 preserves the
-     * existing response contract even when payment returns declined or uncertain.
+     * Customer checkout forwards the stable idempotency key, shipping address and optional bearer
+     * header to CartService. One {@link CheckoutResponse} is returned with one order per nonempty
+     * seller bucket (multi-seller cart in a single call). Snapshot, payment and per-seller cart
+     * clear use separate transactions around the order workflow; empty cart fails before ordering.
+     * Do not wrap the controller in a transaction — wallet calls must happen after placement commits.
      */
     @PostMapping("/checkout")
     @ResponseStatus(HttpStatus.CREATED)
-    public OrderResponse checkout(
+    public CheckoutResponse checkout(
             @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
-            @RequestParam(required = false) Long sellerOrganisationId,
             @Valid @RequestBody CheckoutRequest request,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         return cartService.checkout(
                 user.userId(),
-                user.orgIds(),
                 idempotencyKey,
                 authorization,
-                request,
-                sellerOrganisationId
+                request
         );
     }
 }

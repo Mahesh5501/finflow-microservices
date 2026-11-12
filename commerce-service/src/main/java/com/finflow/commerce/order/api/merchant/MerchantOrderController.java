@@ -3,7 +3,6 @@ package com.finflow.commerce.order.api.merchant;
 import com.finflow.commerce.order.dto.OrderResponse;
 import com.finflow.commerce.order.application.CommerceService;
 import com.finflow.commerce.security.AuthenticatedUser;
-import jakarta.validation.constraints.NotNull;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -48,11 +47,10 @@ public class MerchantOrderController {
      */
     @GetMapping
     public List<OrderResponse> list(
-            @RequestParam @NotNull Long organisationId,
             @RequestParam(defaultValue = "false") boolean mineOnly,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return commerceService.listOrders(organisationId, user.userId(), user.orgIds(), mineOnly);
+        return commerceService.listSellerOrders(user.userId(), user.orgIds(), mineOnly);
     }
 
     /**

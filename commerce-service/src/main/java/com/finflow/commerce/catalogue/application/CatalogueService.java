@@ -8,6 +8,7 @@ import com.finflow.commerce.catalogue.dto.ProductUpdateRequest;
 import com.finflow.commerce.catalogue.domain.Category;
 import com.finflow.commerce.catalogue.domain.Product;
 import com.finflow.commerce.exception.ApiException;
+import com.finflow.commerce.seller.MerchantSellerAccess;
 import com.finflow.commerce.catalogue.persistence.CategoryRepository;
 import com.finflow.commerce.catalogue.persistence.ProductRepository;
 import jakarta.persistence.criteria.Predicate;
@@ -100,25 +101,22 @@ public class CatalogueService {
      */
 
     @Transactional
-    @CacheEvict( // Evict only this organisation's cached category list after a successful write; otherwise callers could keep seeing stale data.
-            value = "categories",
-            key = "#request.organisationId()"
-    )
+    @CacheEvict(value = "categories", key = "#result.sellerId()")
     public CategoryResponse createCategory(List<Long> callerOrgIds, CategoryRequest request) {
 
-        requireOrgAccess(callerOrgIds, request.organisationId()); // Ensure the caller belongs to the target organisation.
-        String slug = request.slug().trim().toLowerCase(); // Normalize the slug so that casing and surrounding spaces do not create logically duplicate category identifiers.
+        // Merchant seller is taken from JWT orgIds, not from CategoryRequest (marketplace API rule).
+        Long sellerId = MerchantSellerAccess.requireSellerId(callerOrgIds);
+        String slug = request.slug().trim().toLowerCase();
 
-        // Check whether the organisation already has this slug.
-        if (categoryRepository.existsByOrganisationIdAndSlugIgnoreCase(request.organisationId(), slug)) {
+        if (categoryRepository.existsByOrganisationIdAndSlugIgnoreCase(sellerId, slug)) {
             throw ApiException.conflict(
                     "CATEGORY_EXISTS",
                     "Category slug already exists"
             );
         }
 
-        Category category = new Category(request.organisationId(), request.name(), slug); // Create the category entity.
-        return CategoryResponse.from(categoryRepository.save(category)); // Save the category and convert it to the API response.
+        Category category = new Category(sellerId, request.name(), slug);
+        return CategoryResponse.from(categoryRepository.save(category));
     }
 
     /**
@@ -149,14 +147,12 @@ public class CatalogueService {
      */
     @Transactional
     public ProductResponse createProduct(List<Long> callerOrgIds, ProductRequest request) {
-        requireOrgAccess(callerOrgIds, request.organisationId());
+        // Same seller resolution as categories — body cannot name a different shop.
+        Long sellerId = MerchantSellerAccess.requireSellerId(callerOrgIds);
+        Long categoryId = validateCategory(sellerId, request.categoryId());
 
-        // Verify that the category exists and belongs to this organisation. A null category ID is allowed by validateCategory().
-        Long categoryId = validateCategory(request.organisationId(), request.categoryId());
-
-        // Create the product entity using validated request data.
         Product product = new Product(
-                request.organisationId(),
+                sellerId,
                 request.name().trim(),
                 request.unitPrice(),
                 request.availableQuantity(),

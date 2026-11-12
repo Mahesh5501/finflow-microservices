@@ -7,6 +7,7 @@ import com.finflow.commerce.cart.dto.CartResponse;
 import com.finflow.commerce.order.dto.CheckoutRequest;
 import com.finflow.commerce.order.dto.CreateOrderRequest;
 import com.finflow.commerce.order.dto.OrderItemRequest;
+import com.finflow.commerce.order.dto.CheckoutResponse;
 import com.finflow.commerce.order.dto.OrderResponse;
 import com.finflow.commerce.cart.dto.UpdateCartItemRequest;
 import com.finflow.commerce.cart.domain.Cart;
@@ -24,9 +25,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Marketplace cart: shoppers add by {@code productId} only; seller is derived from the product row.
@@ -83,17 +83,15 @@ public class CartService {
     }
 
     /**
-     * Customer add validates active product and requested stock, derives the seller, then
-     * increments the Cart domain quantity and returns the merged view in one transaction.
-     * Missing/inactive products or insufficient requested stock fail before persistence.
-     * This checks the incoming amount; accumulated quantity is revalidated at placement.
+     * Customer add validates active product and requested stock, derives the seller from the
+     * product row (not from the request), then increments the Cart domain quantity and returns
+     * the merged view in one transaction. Missing/inactive products or insufficient requested
+     * stock fail before persistence. This checks the incoming amount; accumulated quantity is
+     * revalidated at placement. {@code callerOrgIds} is intentionally not used on customer cart
+     * mutations — buyers are not seller org members.
      */
     @Transactional
-    public CartResponse addItem(
-            Long customerUserId,
-            List<Long> callerOrgIds,
-            CartItemRequest request
-    ) {
+    public CartResponse addItem(Long customerUserId, CartItemRequest request) {
         Product product = requireActiveProduct(request.productId());
         long sellerOrg = product.getOrganisationId();
 
@@ -117,7 +115,6 @@ public class CartService {
     @Transactional
     public CartResponse upsertItem(
             Long customerUserId,
-            List<Long> callerOrgIds,
             Long productId,
             UpdateCartItemRequest request
     ) {
@@ -142,11 +139,7 @@ public class CartService {
      * owner's line. A missing cart is harmless; a missing product retains the 404 contract.
      */
     @Transactional
-    public CartResponse removeItem(
-            Long customerUserId,
-            List<Long> callerOrgIds,
-            Long productId
-    ) {
+    public CartResponse removeItem(Long customerUserId, Long productId) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> ApiException.notFound(
                         "PRODUCT_NOT_FOUND",
@@ -167,7 +160,7 @@ public class CartService {
      * The repository query never accepts a customer ID from the HTTP body.
      */
     @Transactional
-    public CartResponse clear(Long customerUserId, List<Long> callerOrgIds) {
+    public CartResponse clear(Long customerUserId) {
         for (Cart cart : cartRepository.findByCustomerUserId(customerUserId)) {
             cart.clearItems();
             cartRepository.save(cart);
@@ -176,80 +169,68 @@ public class CartService {
     }
 
     /**
-     * CartController checkout selects one seller (explicitly or by inference), snapshots
-     * its lines, calls order placement/payment, then clears that seller separately.
-     * Empty or ambiguous multi-seller carts fail before ordering. Do not add an outer
-     * transaction: wallet calls must happen after placement commits.
+     * Marketplace checkout: for each nonempty seller bucket, snapshot lines, place and pay one
+     * order, then clear that seller's cart lines. Returns {@link CheckoutResponse} with all orders
+     * created in this call (sorted seller iteration). Idempotency keys are scoped per seller:
+     * {@code baseKey + ":" + sellerId}. Do not add an outer transaction — wallet HTTP must happen
+     * after each placement commit. If a later seller's payment fails, earlier seller orders may
+     * already exist; callers should treat partial success explicitly in the UI.
      */
-    public OrderResponse checkout(
+    public CheckoutResponse checkout(
             Long customerUserId,
-            List<Long> callerOrgIds,
             String idempotencyKey,
             String accessToken,
-            CheckoutRequest request,
-            Long sellerOrganisationId
+            CheckoutRequest request
     ) {
-        Long seller = sellerOrganisationId != null
-                ? sellerOrganisationId
-                : request.organisationId();
-        if (seller == null) {
-            // Seller inference reads lazy cart items. Keep those reads attached
-            // without spanning the subsequent order placement/payment call.
-            seller = transactionTemplate.execute(status -> inferCheckoutSeller(customerUserId));
+        List<Long> sellers = transactionTemplate.execute(status -> listNonemptySellerIds(customerUserId));
+        if (sellers == null || sellers.isEmpty()) {
+            throw ApiException.unprocessable("CART_EMPTY", "Cart is empty");
         }
 
-        final Long checkoutSeller = seller;
-        List<OrderItemRequest> lines = transactionTemplate.execute(
-                status -> snapshotLines(customerUserId, checkoutSeller)
-        );
+        List<OrderResponse> orders = new ArrayList<>();
+        for (Long sellerId : sellers) {
+            List<OrderItemRequest> lines = transactionTemplate.execute(
+                    status -> snapshotLines(customerUserId, sellerId)
+            );
+            String sellerKey = idempotencyKey + ":" + sellerId;
+            OrderResponse order = commerceService.createOrder(
+                    customerUserId,
+                    List.of(),
+                    sellerKey,
+                    accessToken,
+                    new CreateOrderRequest(
+                            sellerId,
+                            lines,
+                            request.shippingAddress(),
+                            request.couponCode(),
+                            request.paymentOutcome()
+                    )
+            );
+            orders.add(order);
 
-        OrderResponse order = commerceService.createOrder(
-                customerUserId,
-                callerOrgIds,
-                idempotencyKey,
-                accessToken,
-                new CreateOrderRequest(
-                        checkoutSeller,
-                        lines,
-                        request.shippingAddress(),
-                        request.couponCode(),
-                        request.paymentOutcome()
-                )
-        );
+            transactionTemplate.executeWithoutResult(status ->
+                    cartRepository.findByCustomerUserIdAndOrganisationId(customerUserId, sellerId)
+                            .ifPresent(cart -> {
+                                cart.clearItems();
+                                cartRepository.save(cart);
+                            }));
+        }
 
-        final Long clearSeller = checkoutSeller;
-        transactionTemplate.executeWithoutResult(status -> {
-            cartRepository.findByCustomerUserIdAndOrganisationId(customerUserId, clearSeller)
-                    .ifPresent(cart -> {
-                        cart.clearItems();
-                        cartRepository.save(cart);
-                    });
-        });
-
-        return order;
+        return new CheckoutResponse(orders);
     }
 
     /**
-     * Finds the sole nonempty seller bucket; multi-seller carts require the existing
-     * sellerOrganisationId checkout parameter. Does not change any cart.
+     * Collects seller ids for carts that still have lines. Deterministic order supports stable
+     * checkout and idempotency replay across sellers.
      */
-    private Long inferCheckoutSeller(Long customerUserId) {
-        Set<Long> sellers = new HashSet<>();
+    private List<Long> listNonemptySellerIds(Long customerUserId) {
+        TreeSet<Long> sellers = new TreeSet<>();
         for (Cart cart : cartRepository.findByCustomerUserId(customerUserId)) {
             if (!cart.getItems().isEmpty()) {
                 sellers.add(cart.getOrganisationId());
             }
         }
-        if (sellers.isEmpty()) {
-            throw ApiException.unprocessable("CART_EMPTY", "Cart is empty");
-        }
-        if (sellers.size() > 1) {
-            throw ApiException.unprocessable(
-                    "MULTI_SELLER_CHECKOUT",
-                    "Cart has items from multiple sellers. Checkout one seller at a time using sellerOrganisationId."
-            );
-        }
-        return sellers.iterator().next();
+        return new ArrayList<>(sellers);
     }
 
     /**

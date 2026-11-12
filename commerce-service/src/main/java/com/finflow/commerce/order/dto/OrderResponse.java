@@ -15,7 +15,7 @@ import java.util.List;
 public record OrderResponse(
         Long orderId, // Database-generated order ID.
         String orderNumber, // Human-readable order reference.
-        Long organisationId, // Organisation that owns the order.
+        Long sellerId, // Seller that fulfilled this order (internal key; shown for support, not customer input).
         Long customerUserId, // Customer who placed the order.
         OrderStatus status, // Current order lifecycle status.
         BigDecimal totalAmount, // Final order amount.

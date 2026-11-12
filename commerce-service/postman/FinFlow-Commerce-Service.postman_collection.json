@@ -310,7 +310,7 @@
             "url": "{{commerceBaseUrl}}/api/v1/merchant/categories",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": {{orgId}},\n  \"name\": \"Postman Electronics\",\n  \"slug\": \"electronics-{{commerceRunId}}\"\n}",
+              "raw": "{\n  \"sellerId\": {{orgId}},\n  \"name\": \"Postman Electronics\",\n  \"slug\": \"electronics-{{commerceRunId}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -344,7 +344,7 @@
                   "pm.test('HTTP status [201]', function () { pm.expect(pm.response.code).to.be.oneOf([201]); });",
                   "pm.test('JSON response', function () { pm.expect(pm.response.headers.get('Content-Type')).to.match(/json/i); });",
                   "const body = pm.response.json();",
-                  "pm.test('Category belongs to the seller', function () { pm.expect(body.organisationId).to.eql(Number(pm.variables.get('orgId'))); });",
+                  "pm.test('Category belongs to the seller', function () { pm.expect(body.sellerId).to.eql(Number(pm.variables.get('orgId'))); });",
                   "pm.test('Capture valid categoryId', function () {",
                   "    pm.expect(body.categoryId).to.be.a('number').above(0);",
                   "});",
@@ -400,7 +400,7 @@
             "url": "{{commerceBaseUrl}}/api/v1/merchant/products",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": {{orgId}},\n  \"name\": \"Postman Laptop {{commerceRunId}}\",\n  \"unitPrice\": \"120.00\",\n  \"availableQuantity\": 100,\n  \"categoryId\": {{commerceCategoryId}}\n}",
+              "raw": "{\n  \"sellerId\": {{orgId}},\n  \"name\": \"Postman Laptop {{commerceRunId}}\",\n  \"unitPrice\": \"120.00\",\n  \"availableQuantity\": 100,\n  \"categoryId\": {{commerceCategoryId}}\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -427,7 +427,7 @@
                   "pm.test('JSON response', function () { pm.expect(pm.response.headers.get('Content-Type')).to.match(/json/i); });",
                   "const body = pm.response.json();",
                   "pm.test('Product response matches the fixture', function () {",
-                  "    pm.expect(body.organisationId).to.eql(Number(pm.variables.get('orgId')));",
+                  "    pm.expect(body.sellerId).to.eql(Number(pm.variables.get('orgId')));",
                   "    pm.expect(body.status).to.eql('ACTIVE');",
                   "    pm.expect(body.categoryId).to.eql(Number(pm.variables.get('commerceCategoryId')));",
                   "});",
@@ -469,7 +469,7 @@
                   "pm.test('JSON response', function () { pm.expect(pm.response.headers.get('Content-Type')).to.match(/json/i); });",
                   "const body = pm.response.json();",
                   "pm.test('Product response matches the fixture', function () {",
-                  "    pm.expect(body.organisationId).to.eql(Number(pm.variables.get('orgId')));",
+                  "    pm.expect(body.sellerId).to.eql(Number(pm.variables.get('orgId')));",
                   "    pm.expect(body.status).to.eql('ACTIVE');",
                   "    pm.expect(body.categoryId).to.eql(Number(pm.variables.get('commerceCategoryId')));",
                   "});"
@@ -560,7 +560,7 @@
                   "pm.test('JSON response', function () { pm.expect(pm.response.headers.get('Content-Type')).to.match(/json/i); });",
                   "const body = pm.response.json();",
                   "pm.test('Product response matches the fixture', function () {",
-                  "    pm.expect(body.organisationId).to.eql(Number(pm.variables.get('orgId')));",
+                  "    pm.expect(body.sellerId).to.eql(Number(pm.variables.get('orgId')));",
                   "    pm.expect(body.status).to.eql('ACTIVE');",
                   "    pm.expect(body.categoryId).to.eql(Number(pm.variables.get('commerceCategoryId')));",
                   "});",
@@ -583,7 +583,7 @@
             "url": "{{commerceBaseUrl}}/api/v1/merchant/coupons",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": {{orgId}},\n  \"code\": \"{{commerceCouponCode}}\",\n  \"percentOff\": \"10.00\",\n  \"expiresAt\": null\n}",
+              "raw": "{\n  \"sellerId\": {{orgId}},\n  \"code\": \"{{commerceCouponCode}}\",\n  \"percentOff\": \"10.00\",\n  \"expiresAt\": null\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -886,7 +886,7 @@
                   "pm.test('Order state, price and snapshots', function () {",
                   "    pm.expect(body.status).to.eql('CONFIRMED');",
                   "    pm.expect(body.currencyCode).to.eql('INR');",
-                  "    pm.expect(body.organisationId).to.eql(Number(pm.variables.get('orgId')));",
+                  "    pm.expect(body.sellerId).to.eql(Number(pm.variables.get('orgId')));",
                   "    pm.expect(Number(body.totalAmount)).to.eql(180);",
                   "    pm.expect(body.items).to.be.an('array').that.is.not.empty;",
                   "    pm.expect(body.items[0].productId).to.eql(Number(pm.variables.get('commerceProductId')));",
@@ -902,10 +902,10 @@
                   "});",
                   "pm.test('Coupon discount applied', function () { pm.expect(Number(body.discountAmount)).to.eql(20); });",
                   "pm.test('Capture valid orderId', function () {",
-                  "    pm.expect(body.orderId).to.be.a('number').above(0);",
+                  "    pm.expect(body.orders[0].orderId).to.be.a('number').above(0);",
                   "});",
-                  "if ([201].includes(pm.response.code) && Number.isInteger(body.orderId) && body.orderId > 0) {",
-                  "    pm.collectionVariables.set('commerceCheckoutOrderId', String(body.orderId));",
+                  "if ([201].includes(pm.response.code) && Number.isInteger(body.orders[0].orderId) && body.orders[0].orderId > 0) {",
+                  "    pm.collectionVariables.set('commerceCheckoutOrderId', String(body.orders[0].orderId));",
                   "}"
                 ]
               }
@@ -1000,7 +1000,7 @@
                 "value": "{{commerceSelectedSellerKey}}"
               }
             ],
-            "url": "{{commerceBaseUrl}}/api/v1/customer/carts/checkout?sellerOrganisationId={{orgId}}",
+            "url": "{{commerceBaseUrl}}/api/v1/customer/carts/checkout",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"shippingAddress\": {\n    \"line1\": \"1 FinFlow Test Road\",\n    \"line2\": null,\n    \"city\": \"Hyderabad\",\n    \"state\": \"Telangana\",\n    \"postalCode\": \"500001\",\n    \"country\": \"IN\"\n  },\n  \"couponCode\": null,\n  \"paymentOutcome\": null\n}",
@@ -1033,7 +1033,7 @@
                   "pm.test('Order state, price and snapshots', function () {",
                   "    pm.expect(body.status).to.eql('CONFIRMED');",
                   "    pm.expect(body.currencyCode).to.eql('INR');",
-                  "    pm.expect(body.organisationId).to.eql(Number(pm.variables.get('orgId')));",
+                  "    pm.expect(body.sellerId).to.eql(Number(pm.variables.get('orgId')));",
                   "    pm.expect(Number(body.totalAmount)).to.eql(100);",
                   "    pm.expect(body.items).to.be.an('array').that.is.not.empty;",
                   "    pm.expect(body.items[0].productId).to.eql(Number(pm.variables.get('commerceProductId')));",
@@ -1049,10 +1049,10 @@
                   "});",
                   "",
                   "pm.test('Capture valid orderId', function () {",
-                  "    pm.expect(body.orderId).to.be.a('number').above(0);",
+                  "    pm.expect(body.orders[0].orderId).to.be.a('number').above(0);",
                   "});",
-                  "if ([201].includes(pm.response.code) && Number.isInteger(body.orderId) && body.orderId > 0) {",
-                  "    pm.collectionVariables.set('commerceSelectedSellerOrderId', String(body.orderId));",
+                  "if ([201].includes(pm.response.code) && Number.isInteger(body.orders[0].orderId) && body.orders[0].orderId > 0) {",
+                  "    pm.collectionVariables.set('commerceSelectedSellerOrderId', String(body.orders[0].orderId));",
                   "}"
                 ]
               }
@@ -1112,7 +1112,7 @@
                   "pm.test('Order state, price and snapshots', function () {",
                   "    pm.expect(body.status).to.eql('CONFIRMED');",
                   "    pm.expect(body.currencyCode).to.eql('INR');",
-                  "    pm.expect(body.organisationId).to.eql(Number(pm.variables.get('orgId')));",
+                  "    pm.expect(body.sellerId).to.eql(Number(pm.variables.get('orgId')));",
                   "    pm.expect(Number(body.totalAmount)).to.eql(100);",
                   "    pm.expect(body.items).to.be.an('array').that.is.not.empty;",
                   "    pm.expect(body.items[0].productId).to.eql(Number(pm.variables.get('commerceProductId')));",
@@ -1128,10 +1128,10 @@
                   "});",
                   "",
                   "pm.test('Capture valid orderId', function () {",
-                  "    pm.expect(body.orderId).to.be.a('number').above(0);",
+                  "    pm.expect(body.orders[0].orderId).to.be.a('number').above(0);",
                   "});",
-                  "if ([201].includes(pm.response.code) && Number.isInteger(body.orderId) && body.orderId > 0) {",
-                  "    pm.collectionVariables.set('commerceOrderId', String(body.orderId));",
+                  "if ([201].includes(pm.response.code) && Number.isInteger(body.orders[0].orderId) && body.orders[0].orderId > 0) {",
+                  "    pm.collectionVariables.set('commerceOrderId', String(body.orders[0].orderId));",
                   "}"
                 ]
               }
@@ -1185,7 +1185,7 @@
                   "pm.test('Order state, price and snapshots', function () {",
                   "    pm.expect(body.status).to.eql('CONFIRMED');",
                   "    pm.expect(body.currencyCode).to.eql('INR');",
-                  "    pm.expect(body.organisationId).to.eql(Number(pm.variables.get('orgId')));",
+                  "    pm.expect(body.sellerId).to.eql(Number(pm.variables.get('orgId')));",
                   "    pm.expect(Number(body.totalAmount)).to.eql(100);",
                   "    pm.expect(body.items).to.be.an('array').that.is.not.empty;",
                   "    pm.expect(body.items[0].productId).to.eql(Number(pm.variables.get('commerceProductId')));",
@@ -1199,7 +1199,7 @@
                   "        pm.expect(body.paymentTransactionId).to.be.a('number').above(0);",
                   "    }",
                   "});",
-                  "pm.test('Replay returns original order', function () { pm.expect(body.orderId).to.eql(Number(pm.variables.get('commerceOrderId'))); });"
+                  "pm.test('Replay returns original order', function () { pm.expect(body.orders[0].orderId).to.eql(Number(pm.variables.get('commerceOrderId'))); });"
                 ]
               }
             }
@@ -1262,7 +1262,7 @@
                   "pm.test('Order state, price and snapshots', function () {",
                   "    pm.expect(body.status).to.eql('CONFIRMED');",
                   "    pm.expect(body.currencyCode).to.eql('INR');",
-                  "    pm.expect(body.organisationId).to.eql(Number(pm.variables.get('orgId')));",
+                  "    pm.expect(body.sellerId).to.eql(Number(pm.variables.get('orgId')));",
                   "    pm.expect(Number(body.totalAmount)).to.eql(100);",
                   "    pm.expect(body.items).to.be.an('array').that.is.not.empty;",
                   "    pm.expect(body.items[0].productId).to.eql(Number(pm.variables.get('commerceProductId')));",
@@ -1286,7 +1286,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{commerceBaseUrl}}/api/v1/merchant/orders?organisationId={{orgId}}&mineOnly=false"
+            "url": "{{commerceBaseUrl}}/api/v1/merchant/orders?sellerId={{orgId}}&mineOnly=false"
           },
           "event": [
             {
@@ -1308,7 +1308,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{commerceBaseUrl}}/api/v1/merchant/orders?organisationId={{orgId}}&mineOnly=true"
+            "url": "{{commerceBaseUrl}}/api/v1/merchant/orders?sellerId={{orgId}}&mineOnly=true"
           },
           "event": [
             {
@@ -1353,7 +1353,7 @@
                   "pm.test('Order state, price and snapshots', function () {",
                   "    pm.expect(body.status).to.eql('CONFIRMED');",
                   "    pm.expect(body.currencyCode).to.eql('INR');",
-                  "    pm.expect(body.organisationId).to.eql(Number(pm.variables.get('orgId')));",
+                  "    pm.expect(body.sellerId).to.eql(Number(pm.variables.get('orgId')));",
                   "    pm.expect(Number(body.totalAmount)).to.eql(100);",
                   "    pm.expect(body.items).to.be.an('array').that.is.not.empty;",
                   "    pm.expect(body.items[0].productId).to.eql(Number(pm.variables.get('commerceProductId')));",
@@ -1456,7 +1456,7 @@
                   "pm.test('Order state, price and snapshots', function () {",
                   "    pm.expect(body.status).to.eql('CONFIRMED');",
                   "    pm.expect(body.currencyCode).to.eql('INR');",
-                  "    pm.expect(body.organisationId).to.eql(Number(pm.variables.get('orgId')));",
+                  "    pm.expect(body.sellerId).to.eql(Number(pm.variables.get('orgId')));",
                   "    pm.expect(Number(body.totalAmount)).to.eql(100);",
                   "    pm.expect(body.items).to.be.an('array').that.is.not.empty;",
                   "    pm.expect(body.items[0].productId).to.eql(Number(pm.variables.get('commerceProductId')));",
@@ -1472,10 +1472,10 @@
                   "});",
                   "",
                   "pm.test('Capture valid orderId', function () {",
-                  "    pm.expect(body.orderId).to.be.a('number').above(0);",
+                  "    pm.expect(body.orders[0].orderId).to.be.a('number').above(0);",
                   "});",
-                  "if ([201].includes(pm.response.code) && Number.isInteger(body.orderId) && body.orderId > 0) {",
-                  "    pm.collectionVariables.set('commerceCancelOrderId', String(body.orderId));",
+                  "if ([201].includes(pm.response.code) && Number.isInteger(body.orders[0].orderId) && body.orders[0].orderId > 0) {",
+                  "    pm.collectionVariables.set('commerceCancelOrderId', String(body.orders[0].orderId));",
                   "}"
                 ]
               }
@@ -1848,7 +1848,7 @@
                   "pm.test('Order state, price and snapshots', function () {",
                   "    pm.expect(body.status).to.eql('CONFIRMED');",
                   "    pm.expect(body.currencyCode).to.eql('INR');",
-                  "    pm.expect(body.organisationId).to.eql(Number(pm.variables.get('orgId')));",
+                  "    pm.expect(body.sellerId).to.eql(Number(pm.variables.get('orgId')));",
                   "    pm.expect(Number(body.totalAmount)).to.eql(100);",
                   "    pm.expect(body.items).to.be.an('array').that.is.not.empty;",
                   "    pm.expect(body.items[0].productId).to.eql(Number(pm.variables.get('commerceProductId')));",
@@ -1864,10 +1864,10 @@
                   "});",
                   "",
                   "pm.test('Capture valid orderId', function () {",
-                  "    pm.expect(body.orderId).to.be.a('number').above(0);",
+                  "    pm.expect(body.orders[0].orderId).to.be.a('number').above(0);",
                   "});",
-                  "if ([201].includes(pm.response.code) && Number.isInteger(body.orderId) && body.orderId > 0) {",
-                  "    pm.collectionVariables.set('commerceRejectedOrderId', String(body.orderId));",
+                  "if ([201].includes(pm.response.code) && Number.isInteger(body.orders[0].orderId) && body.orders[0].orderId > 0) {",
+                  "    pm.collectionVariables.set('commerceRejectedOrderId', String(body.orders[0].orderId));",
                   "}"
                 ]
               }
@@ -2072,17 +2072,17 @@
                   "pm.test('Order state, price and snapshots', function () {",
                   "    pm.expect(body.status).to.eql('ACTION_REQUIRED');",
                   "    pm.expect(body.currencyCode).to.eql('INR');",
-                  "    pm.expect(body.organisationId).to.eql(Number(pm.variables.get('orgId')));",
+                  "    pm.expect(body.sellerId).to.eql(Number(pm.variables.get('orgId')));",
                   "    pm.expect(Number(body.totalAmount)).to.eql(100);",
                   "    pm.expect(body.items).to.be.an('array').that.is.not.empty;",
                   "    pm.expect(body.items[0].productId).to.eql(Number(pm.variables.get('commerceProductId')));",
                   "});",
                   "",
                   "pm.test('Capture valid orderId', function () {",
-                  "    pm.expect(body.orderId).to.be.a('number').above(0);",
+                  "    pm.expect(body.orders[0].orderId).to.be.a('number').above(0);",
                   "});",
-                  "if ([201].includes(pm.response.code) && Number.isInteger(body.orderId) && body.orderId > 0) {",
-                  "    pm.collectionVariables.set('commerceUncertainOrderId', String(body.orderId));",
+                  "if ([201].includes(pm.response.code) && Number.isInteger(body.orders[0].orderId) && body.orders[0].orderId > 0) {",
+                  "    pm.collectionVariables.set('commerceUncertainOrderId', String(body.orders[0].orderId));",
                   "}"
                 ]
               }
@@ -2117,7 +2117,7 @@
                   "pm.test('Order state, price and snapshots', function () {",
                   "    pm.expect(body.status).to.eql('ACTION_REQUIRED');",
                   "    pm.expect(body.currencyCode).to.eql('INR');",
-                  "    pm.expect(body.organisationId).to.eql(Number(pm.variables.get('orgId')));",
+                  "    pm.expect(body.sellerId).to.eql(Number(pm.variables.get('orgId')));",
                   "    pm.expect(Number(body.totalAmount)).to.eql(100);",
                   "    pm.expect(body.items).to.be.an('array').that.is.not.empty;",
                   "    pm.expect(body.items[0].productId).to.eql(Number(pm.variables.get('commerceProductId')));",
@@ -2205,17 +2205,17 @@
                   "pm.test('Order state, price and snapshots', function () {",
                   "    pm.expect(body.status).to.eql('PAYMENT_FAILED');",
                   "    pm.expect(body.currencyCode).to.eql('INR');",
-                  "    pm.expect(body.organisationId).to.eql(Number(pm.variables.get('orgId')));",
+                  "    pm.expect(body.sellerId).to.eql(Number(pm.variables.get('orgId')));",
                   "    pm.expect(Number(body.totalAmount)).to.eql(100);",
                   "    pm.expect(body.items).to.be.an('array').that.is.not.empty;",
                   "    pm.expect(body.items[0].productId).to.eql(Number(pm.variables.get('commerceProductId')));",
                   "});",
                   "",
                   "pm.test('Capture valid orderId', function () {",
-                  "    pm.expect(body.orderId).to.be.a('number').above(0);",
+                  "    pm.expect(body.orders[0].orderId).to.be.a('number').above(0);",
                   "});",
-                  "if ([201].includes(pm.response.code) && Number.isInteger(body.orderId) && body.orderId > 0) {",
-                  "    pm.collectionVariables.set('commerceDeclinedOrderId', String(body.orderId));",
+                  "if ([201].includes(pm.response.code) && Number.isInteger(body.orders[0].orderId) && body.orders[0].orderId > 0) {",
+                  "    pm.collectionVariables.set('commerceDeclinedOrderId', String(body.orders[0].orderId));",
                   "}"
                 ]
               }

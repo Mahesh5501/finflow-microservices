@@ -13,6 +13,6 @@ public record CartItemResponse(
         int quantity, // Number of units currently requested in the cart.
         BigDecimal lineTotal, // Total price for this line: unitPrice multiplied by quantity.
         int availableQuantity, // Current available stock for this product.
-        Long sellerOrganisationId // Internal seller id (shown as "Sold by" in UIs if needed).
+        Long sellerId // Internal seller id for the product line (maps to persistence organisation id).
 ) {
 }

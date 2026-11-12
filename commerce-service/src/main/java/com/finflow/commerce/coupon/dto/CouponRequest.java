@@ -11,12 +11,12 @@ import java.time.Instant;
 
 /**
  * Request used to create a coupon.
+ * Seller ownership is resolved from the merchant's JWT — coupons remain seller-scoped in persistence.
  * A record is suitable because this DTO carries request data and does not need mutable fields.
  */
 public record CouponRequest(
-        @NotNull Long organisationId, // Organisation that owns this coupon. Required because coupons are organisation-specific.
-        @NotBlank @Size(max = 40) String code, // Coupon code entered by the customer during checkout. Cannot be null, empty or whitespace-only. Maximum allowed length is 40 characters.
-        @NotNull @DecimalMin("1.00") @DecimalMax("90.00") BigDecimal percentOff, // Percentage discount offered by this coupon. Must be between 1% and 90%, inclusive.
-        Instant expiresAt // Optional expiry date/time. Null means no expiry time is supplied.
+        @NotBlank @Size(max = 40) String code, // Coupon code entered at checkout; max 40 characters.
+        @NotNull @DecimalMin("1.00") @DecimalMax("90.00") BigDecimal percentOff, // Between 1% and 90% inclusive.
+        Instant expiresAt // Optional expiry; null means no expiry time on the request.
 ) {
 }

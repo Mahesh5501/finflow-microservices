@@ -12,7 +12,7 @@ import java.math.BigDecimal;
  */
 public record ProductResponse(
         Long productId,
-        Long organisationId,
+        Long sellerId,
         Long categoryId,
         String categoryName,
         String name,

@@ -11,7 +11,7 @@ import java.time.Instant;
  */
 public record CouponResponse(
         Long couponId, // Database-generated coupon identifier.
-        Long organisationId, // Organisation that owns this coupon.
+        Long sellerId,
         String code, // Normalised coupon code.
         BigDecimal percentOff, // Discount percentage.
         boolean active, // Whether the coupon is currently active.

@@ -38,7 +38,7 @@ class CatalogueServiceTest {
     void cachedCategoriesStillRequireMembershipAndCreationEvicts() {
         long seller = 610L;
         List<Long> allowed = List.of(seller);
-        catalogueService.createCategory(allowed, new CategoryRequest(seller, "Cached A", "cached-a"));
+        catalogueService.createCategory(allowed, new CategoryRequest("Cached A", "cached-a"));
         var first = catalogueService.listCategories(seller, allowed);
         var cache = cacheManager.getCache("categories");
         assertNotNull(cache);
@@ -47,7 +47,7 @@ class CatalogueServiceTest {
         assertThrows(ApiException.class, () -> catalogueService.listCategories(seller, null));
         var serializer = new JdkSerializationRedisSerializer();
         assertEquals(first, serializer.deserialize(serializer.serialize(first)));
-        catalogueService.createCategory(allowed, new CategoryRequest(seller, "Cached B", "cached-b"));
+        catalogueService.createCategory(allowed, new CategoryRequest("Cached B", "cached-b"));
         assertNull(cache.get(seller));
         assertEquals(2, catalogueService.listCategories(seller, allowed).size());
     }
@@ -55,11 +55,11 @@ class CatalogueServiceTest {
     @Test
     void productUpdatesPreserveMerchantAndCategoryIsolation() {
         var category = catalogueService.createCategory(List.of(620L),
-                new CategoryRequest(620L, "Own", "own"));
+                new CategoryRequest("Own", "own"));
         var foreign = catalogueService.createCategory(List.of(621L),
-                new CategoryRequest(621L, "Foreign", "foreign"));
+                new CategoryRequest("Foreign", "foreign"));
         var product = catalogueService.createProduct(List.of(620L),
-                new ProductRequest(620L, "Scoped", new BigDecimal("12.00"), 4, category.categoryId()));
+                new ProductRequest("Scoped", new BigDecimal("12.00"), 4, category.categoryId()));
         assertThrows(ApiException.class, () -> catalogueService.updateProduct(product.productId(), List.of(621L),
                 new ProductUpdateRequest(new BigDecimal("13.00"), null, null)));
         assertEquals("CATEGORY_ORG_MISMATCH", assertThrows(ApiException.class,
@@ -75,14 +75,14 @@ class CatalogueServiceTest {
     @Test
     void category_and_search_by_name_and_category() {
         CategoryResponse category = catalogueService.createCategory(
-                ORGS, new CategoryRequest(10L, "Apparel", "apparel")
+                ORGS, new CategoryRequest("Apparel", "apparel")
         );
 
         catalogueService.createProduct(
-                ORGS, new ProductRequest(10L, "Blue Tee", new BigDecimal("20.00"), 10, category.categoryId())
+                ORGS, new ProductRequest("Blue Tee", new BigDecimal("20.00"), 10, category.categoryId())
         );
         catalogueService.createProduct(
-                ORGS, new ProductRequest(10L, "Red Mug", new BigDecimal("12.00"), 10, null)
+                ORGS, new ProductRequest("Red Mug", new BigDecimal("12.00"), 10, null)
         );
 
         Page<ProductResponse> byName = catalogueService.searchProducts(

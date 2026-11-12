@@ -5,6 +5,7 @@ import com.finflow.commerce.coupon.dto.CouponRequest;
 import com.finflow.commerce.coupon.dto.CouponResponse;
 import com.finflow.commerce.coupon.persistence.CouponRepository;
 import com.finflow.commerce.exception.ApiException;
+import com.finflow.commerce.seller.MerchantSellerAccess;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,26 +46,21 @@ public class CouponService {
             CouponRequest request
     ) {
 
-        // A caller must belong to the organisation for which the coupon
-        // is being created.
-        requireOrgAccess(callerOrgIds, request.organisationId());
+        // Seller comes from the token — never from the request body (prevents cross-shop coupon creation).
+        Long sellerId = MerchantSellerAccess.requireSellerId(callerOrgIds);
 
-        // Prevent creating another coupon with the same code
-        // within the same organisation.
         if (couponRepository.findByOrganisationIdAndCodeIgnoreCase(
-                request.organisationId(),
+                sellerId,
                 request.code()
         ).isPresent()) {
-
             throw ApiException.conflict(
                     "COUPON_EXISTS",
                     "Coupon code already exists"
             );
         }
 
-        // Convert the incoming request into a JPA entity.
         Coupon coupon = new Coupon(
-                request.organisationId(),
+                sellerId,
                 request.code(),
                 request.percentOff(),
                 request.expiresAt()

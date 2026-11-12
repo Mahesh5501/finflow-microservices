@@ -18,6 +18,7 @@ import com.finflow.commerce.order.domain.OutboxStatus;
 import com.finflow.commerce.order.dto.CheckoutRequest;
 import com.finflow.commerce.order.dto.CreateOrderRequest;
 import com.finflow.commerce.order.dto.OrderItemRequest;
+import com.finflow.commerce.order.dto.CheckoutResponse;
 import com.finflow.commerce.order.dto.OrderResponse;
 import com.finflow.commerce.order.dto.ShippingAddressRequest;
 import com.finflow.commerce.order.persistence.CommerceOrderRepository;
@@ -82,11 +83,12 @@ class FeatureWorkflowIntegrationTest {
         ProductResponse product = product();
         String code = "C" + UUID.randomUUID().toString().replace("-", "");
         var createdCoupon = coupons.createCoupon(MERCHANT_ORGS,
-                new CouponRequest(SELLER, code, new BigDecimal("10"), null));
-        carts.clear(BUYER, List.of());
-        carts.addItem(BUYER, List.of(), new CartItemRequest(product.productId(), 2));
-        OrderResponse result = carts.checkout(BUYER, List.of(), key(), null,
-                new CheckoutRequest(null, address(), code.toLowerCase(), PaymentOutcome.UNCERTAIN), SELLER);
+                new CouponRequest(code, new BigDecimal("10"), null));
+        carts.clear(BUYER);
+        carts.addItem(BUYER, new CartItemRequest(product.productId(), 2));
+        CheckoutResponse checkout = carts.checkout(BUYER, key(), null,
+                new CheckoutRequest(address(), code.toLowerCase(), PaymentOutcome.UNCERTAIN));
+        OrderResponse result = checkout.orders().getFirst();
 
         assertEquals(OrderStatus.ACTION_REQUIRED, result.status());
         assertEquals(0, new BigDecimal("180.0000").compareTo(result.totalAmount()));
@@ -138,12 +140,12 @@ class FeatureWorkflowIntegrationTest {
         ProductResponse product = product();
         String expired = key();
         coupons.createCoupon(MERCHANT_ORGS,
-                new CouponRequest(SELLER, expired, BigDecimal.TEN, Instant.now().minusSeconds(60)));
+                new CouponRequest(expired, BigDecimal.TEN, Instant.now().minusSeconds(60)));
         assertEquals("COUPON_INVALID", assertThrows(ApiException.class,
                 () -> orders.createOrder(BUYER, List.of(), key(), null,
                         request(product, expired, PaymentOutcome.UNCERTAIN))).getCode());
         String foreign = key();
-        coupons.createCoupon(List.of(502L), new CouponRequest(502L, foreign, BigDecimal.TEN, null));
+        coupons.createCoupon(List.of(502L), new CouponRequest(foreign, BigDecimal.TEN, null));
         assertEquals("COUPON_NOT_FOUND", assertThrows(ApiException.class,
                 () -> orders.createOrder(BUYER, List.of(), key(), null,
                         request(product, foreign, PaymentOutcome.UNCERTAIN))).getCode());
@@ -223,22 +225,22 @@ class FeatureWorkflowIntegrationTest {
         mvc.perform(post("/api/v1/customer/carts/items").with(authentication(auth(BUYER, List.of(), "commerce:write")))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"productId\":1,\"quantity\":0}"))
                 .andExpect(status().isBadRequest());
-        String body = "{\"organisationId\":501,\"code\":\"" + key() + "\",\"percentOff\":10}";
+        String body = "{\"code\":\"" + key() + "\",\"percentOff\":10}";
         mvc.perform(post("/api/v1/merchant/coupons").with(authentication(auth(100L, MERCHANT_ORGS, "commerce:write")))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isCreated()).andExpect(jsonPath("organisationId").value(SELLER))
+                .andExpect(status().isCreated()).andExpect(jsonPath("sellerId").value(SELLER))
                 .andExpect(jsonPath("active").value(true));
         mvc.perform(post("/api/v1/merchant/coupons").with(authentication(auth(100L, List.of(502L), "commerce:write")))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isForbidden());
-        mvc.perform(get("/api/v1/merchant/orders").param("organisationId", "501")
+        mvc.perform(get("/api/v1/merchant/orders")
                         .with(authentication(auth(100L, List.of(502L), "commerce:read"))))
                 .andExpect(status().isForbidden());
     }
 
     private ProductResponse product() {
         return catalogue.createProduct(MERCHANT_ORGS,
-                new ProductRequest(SELLER, "Workflow " + key(), new BigDecimal("100.00"), 10, null));
+                new ProductRequest("Workflow " + key(), new BigDecimal("100.00"), 10, null));
     }
 
     private int stock(ProductResponse product) {
