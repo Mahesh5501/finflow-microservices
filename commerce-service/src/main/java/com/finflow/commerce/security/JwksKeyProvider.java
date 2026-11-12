@@ -25,104 +25,31 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class JwksKeyProvider {
 
-    /**
-     * Logger used to record JWKS refresh success and failure.
-     * @return the logger.
-     */
-    private static final Logger log =
-            LoggerFactory.getLogger(JwksKeyProvider.class);
+    private static final Logger log = LoggerFactory.getLogger(JwksKeyProvider.class); // Logger used to record JWKS refresh success and failure.
 
-    /**
-     * HTTP client used to call identity-service's JWKS endpoint.
-     * @return the rest client.
-     */
-    private final RestClient restClient;
+    private final RestClient restClient; // HTTP client used to call identity-service's JWKS endpoint.
+    private final ObjectMapper objectMapper; // Jackson mapper used to parse the JSON JWKS response.
+    private final String jwksUrl; // URL from which the identity service publishes public keys.
+    private final long cacheTtlSeconds; // Number of seconds for which the cached keys remain valid.
+    private final Map<String, RSAPublicKey> keysByKid = new ConcurrentHashMap<>(); // Stores public keys using JWT key ID (kid) as the map key. ConcurrentHashMap supports concurrent reads and updates from multiple request threads.
+    private volatile Instant cacheExpiresAt = Instant.EPOCH; // Time at which the current key cache expires. volatile makes updates visible across threads.
 
-    /**
-     * Jackson mapper used to parse the JSON JWKS response.
-     * @return the object mapper.
-     */
-    private final ObjectMapper objectMapper;
-
-    /**
-     * URL from which the identity service publishes public keys.
-     * @return the JWKS URL.
-     */
-    private final String jwksUrl;
-
-    /**
-     * Number of seconds for which the cached keys remain valid.
-     * @return the cache TTL in seconds.
-     */
-    private final long cacheTtlSeconds;
-
-    /**
-     * Stores public keys using JWT key ID (kid) as the map key.
-     * ConcurrentHashMap supports concurrent reads and updates from multiple request threads.
-     * @return the keys by kid.
-     */
-    private final Map<String, RSAPublicKey> keysByKid =
-            new ConcurrentHashMap<>();
-
-    /**
-     * Time at which the current key cache expires.
-     * volatile makes updates visible across threads.
-     * @return the cache expires at.
-     */
-    private volatile Instant cacheExpiresAt = Instant.EPOCH;
-
-    /**
-     * Spring injects ObjectMapper and reads the JWKS settings from application configuration.
-     * @param objectMapper the object mapper.
-     * @param jwksUrl the JWKS URL.
-     * @param cacheTtlSeconds the cache TTL in seconds.
-     */
-    public JwksKeyProvider(
-            ObjectMapper objectMapper,
-            @Value("${identity.jwks-url}") String jwksUrl,
-            @Value("${identity.jwks-cache-seconds:300}") long cacheTtlSeconds
-    ) {
+    public JwksKeyProvider(ObjectMapper objectMapper, @Value("${identity.jwks-url}") String jwksUrl, @Value("${identity.jwks-cache-seconds:300}") long cacheTtlSeconds) {
+        // Spring injects ObjectMapper and reads the JWKS settings from application configuration.
         this.objectMapper = objectMapper;
         this.jwksUrl = jwksUrl;
         this.cacheTtlSeconds = cacheTtlSeconds;
-
-        // Create the HTTP client used to retrieve JWKS.
         this.restClient = RestClient.create();
     }
 
-    /**
-     * Returns the RSA public key for the supplied JWT key ID.
-     * @param kid the JWT key ID.
-     * @return the RSA public key.
-     * First checks the current cache.
-     * If the key is missing, forces a JWKS refresh and checks again.
-     * @throws IllegalStateException if the key is not found.
-     */
+    // Returns the RSA public key for the supplied JWT key ID. First checks the current cache. If the key is missing, forces a JWKS refresh and checks again.
     public RSAPublicKey getKey(String kid) {
-
-        /**
-         * Refresh only when the cache has expired or is empty.
-         * @param force true if the cache should be refreshed regardless of its expiry.
-         */
-        refreshIfNeeded(false);
-
-        /**
-         * Try to find the requested key in the cache.
-         * @return the RSA public key.
-         */
-        RSAPublicKey key = keysByKid.get(kid);
-
-        /**
-         * The JWT may have been signed using a newly rotated key.
-         * Force a refresh once if the requested kid is not cached.
-         */
-        // Force a refresh once if the requested kid is not cached.
+        refreshIfNeeded(false); // Refresh only when the cache has expired or is empty.
+        RSAPublicKey key = keysByKid.get(kid); // Try to find the requested key in the cache.
         if (key == null) {
             refreshIfNeeded(true);
-            key = keysByKid.get(kid);
+            key = keysByKid.get(kid); // Try to find the requested key in the cache again.
         }
-
-        // If the key is still missing, verification cannot continue.
         if (key == null) {
             throw new IllegalStateException("No JWKS key for kid=" + kid);
         }
@@ -139,13 +66,7 @@ public class JwksKeyProvider {
     private synchronized void refreshIfNeeded(boolean force) {
 
         // Reuse cached keys when they are still valid.
-        /**
-         * A refresh is also unnecessary if the cache is empty only when this condition is false, so an empty cache is loaded.
-         * @return void.
-         */
-        if (!force
-                && Instant.now().isBefore(cacheExpiresAt)
-                && !keysByKid.isEmpty()) {
+        if (!force && Instant.now().isBefore(cacheExpiresAt) && !keysByKid.isEmpty()) {
             return;
         }
 
@@ -156,122 +77,54 @@ public class JwksKeyProvider {
                     .retrieve()
                     .body(String.class);
 
-            // Parse the JSON response.
             JsonNode root = objectMapper.readTree(body);
 
             // Build the refreshed key map separately.
-            /**
-             * Only after parsing do we replace the current cache.
-             * @return the refreshed key map.
-             */
             Map<String, RSAPublicKey> next = new ConcurrentHashMap<>();
 
-            /**
-             * JWKS contains a "keys" array.
-             * @param jwk the JSON node representing the JWK.
-             */
             for (JsonNode jwk : root.path("keys")) {
 
-                /**
-                 * Key ID used by JWT headers to identify the signing key.
-                 * @return the key ID.
-                 */
-                String kid = jwk.path("kid").asText(null);
+                String kid = jwk.path("kid").asText(null); // Get the key ID from the JWK.
 
-                /**
-                 * This implementation supports RSA public keys only.
-                 * @return void.
-                 */
-                if (kid == null
-                        || !"RSA".equals(jwk.path("kty").asText())) {
+                // This implementation supports RSA public keys only.
+                if (kid == null || !"RSA".equals(jwk.path("kty").asText())) {
                     continue;
                 }
 
                 // Convert the RSA modulus and exponent into a Java key.
-                next.put(
-                        kid,
-                        toRsaPublicKey(
-                                jwk.path("n").asText(),
-                                jwk.path("e").asText()
-                        )
-                );
+                next.put(kid, toRsaPublicKey(jwk.path("n").asText(), jwk.path("e").asText()));
             }
 
             // Replace the existing cached keys with the refreshed keys.
             keysByKid.clear();
             keysByKid.putAll(next);
+            cacheExpiresAt = Instant.now().plusSeconds(cacheTtlSeconds); // Set the next cache expiry time.
 
-            // Set the next cache expiry time.
-            cacheExpiresAt =
-                    Instant.now().plusSeconds(cacheTtlSeconds);
-
-            log.info(
-                    "JWKS refreshed from {} keys={}",
-                    jwksUrl,
-                    keysByKid.size()
-            );
+            log.info("JWKS refreshed from {} keys={}", jwksUrl, keysByKid.size()); // Log the refresh success.
 
         } catch (Exception ex) {
 
             // Log refresh failure.
-            log.warn(
-                    "JWKS refresh failed from {}: {}",
-                    jwksUrl,
-                    ex.getMessage()
-            );
+            log.warn("JWKS refresh failed from {}: {}", jwksUrl, ex.getMessage()); // Log the refresh failure.
 
-            /**
-             * If there are no previously cached keys, the application
-             * cannot verify JWT signatures, so fail the lookup.
-             */
-            /**
-             * If cached keys exist, retain them and continue using them.
-             * @return void.
-             */
+            // If there are no previously cached keys, the application cannot verify JWT signatures, so fail the lookup.
             if (keysByKid.isEmpty()) {
-                throw new IllegalStateException(
-                        "Unable to load JWKS from " + jwksUrl,
-                        ex
-                );
+                throw new IllegalStateException("Unable to load JWKS from " + jwksUrl, ex); // Throw an exception if the JWKS cannot be loaded.
             }
         }
     }
 
     /**
-     * Converts RSA modulus (n) and exponent (e) from Base64URL
-     * encoded JWKS values into a Java RSAPublicKey.
+     * Converts RSA modulus (n) and exponent (e) from Base64URL encoded JWKS values into a Java RSAPublicKey.
+     * @param n the RSA modulus.
+     * @param e the RSA exponent.
+     * @return the RSA public key.
+     * @throws Exception if the RSA public key cannot be created.
      */
-    private static RSAPublicKey toRsaPublicKey(
-            String n,
-            String e
-    ) throws Exception {
-
-        /**
-         * Decode the Base64URL-encoded RSA modulus.
-         */
-        byte[] modulus = Base64.getUrlDecoder().decode(n);
-
-        /**
-         * Decode the Base64URL-encoded RSA public exponent.
-         */
-        byte[] exponent = Base64.getUrlDecoder().decode(e);
-
-        /**
-         * RSA public keys are mathematically represented by:
-         * modulus (n) and public exponent (e).
-         * Signum 1 ensures BigInteger treats the byte array as positive.
-         */
-        RSAPublicKeySpec spec = new RSAPublicKeySpec(
-                new BigInteger(1, modulus),
-                new BigInteger(1, exponent)
-        );
-
-        /**
-         * Ask Java's RSA KeyFactory to construct the public key.
-         * @return the RSA public key.
-         */
-        return (RSAPublicKey) KeyFactory
-                .getInstance("RSA")
-                .generatePublic(spec);
+    private static RSAPublicKey toRsaPublicKey(String n, String e) throws Exception {
+        byte[] modulus = Base64.getUrlDecoder().decode(n); // Decode the Base64URL-encoded RSA modulus.
+        byte[] exponent = Base64.getUrlDecoder().decode(e); // Decode the Base64URL-encoded RSA public exponent.
+        RSAPublicKeySpec spec = new RSAPublicKeySpec(new BigInteger(1, modulus), new BigInteger(1, exponent)); // Create the RSA public key specification.
+        return (RSAPublicKey) KeyFactory.getInstance("RSA").generatePublic(spec); // Construct the RSA public key.
     }
 }

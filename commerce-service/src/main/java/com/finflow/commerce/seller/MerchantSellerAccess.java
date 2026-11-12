@@ -7,19 +7,12 @@ import java.util.List;
 /**
  * MERCHANT SELLER RESOLUTION (trusted source, not the HTTP body).
  *
- * <p>Why this exists:</p>
- * <ul>
- *   <li>Customer APIs must not accept a seller or organisation id — that would let a caller
- *       act on another shop's catalogue or orders.</li>
- *   <li>Merchant APIs used to take {@code organisationId} in JSON or query params; that duplicated
- *       what identity already asserts in the JWT {@code orgIds} claim and was easy to get wrong.</li>
- *   <li>This helper is the single place that turns {@code AuthenticatedUser.orgIds()} into the
- *       internal seller key used on products, orders and carts (still stored as organisation id
- *       in persistence until a dedicated Seller entity is introduced).</li>
- * </ul>
+ * Why this exists:
+ * Customer APIs must not accept a seller or organisation id — that would let a caller act on another shop's catalogue or orders.
+ * Merchant APIs used to take {@code organisationId} in JSON or query params; that duplicated what identity already asserts in the JWT {@code orgIds} claim and was easy to get wrong.
+ * This helper is the single place that turns {@code AuthenticatedUser.orgIds()} into the internal seller key used on products, orders and carts (still stored as organisation id in persistence until a dedicated Seller entity is introduced).
  *
- * <p>Call from application services after HTTP authentication — not from controllers alone — so
- * non-HTTP callers cannot skip the same rule.</p>
+ * Call from application services after HTTP authentication — not from controllers alone — so non-HTTP callers cannot skip the same rule.
  */
 public final class MerchantSellerAccess {
 
