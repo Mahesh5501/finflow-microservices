@@ -33,55 +33,29 @@ import java.util.List;
  * Completion triggers a refund and restores product stock.
  *
  * Returns application layer called by CustomerReturnController and
- * MerchantReturnController. It loads return/order repositories, checks owner or seller
- * membership, calls PaymentSettlementService for refunds, and restores Product stock.
- * Constructor injection makes all repositories, transaction coordination and event
- * publication explicit; no wallet database or ledger is owned here.
+ * MerchantReturnController. It loads return/order repositories, checks owner or seller membership, calls PaymentSettlementService for refunds, and restores Product stock.
+ * Constructor injection makes all repositories, transaction coordination and event publication explicit; no wallet database or ledger is owned here.
  *
- * @Service enables discovery. @Transactional REQUIRED groups request/approve/reject
- * state changes; readOnly keeps lazy reads within a unit of work. Without those
- * boundaries multi-step persistence loses its shared transaction. complete deliberately
- * uses TransactionTemplate after the external refund; an encompassing transaction
- * would hold local resources across HTTP and still could not roll back wallet money.
+ * @Service enables discovery. @Transactional REQUIRED groups request/approve/reject state changes; readOnly keeps lazy reads within a unit of work. 
+ * Without those boundaries multi-step persistence loses its shared transaction. 
+ * complete deliberately uses TransactionTemplate after the external refund; an encompassing transaction would hold local resources across HTTP and still could not roll back wallet money.
  *
  * Flow: customer of FULFILLED order -> REQUESTED row -> seller approve/reject -> refund
- * -> local restock/COMPLETED -> event. The original order remains FULFILLED. Domain
- * transition errors become RETURN_STATE conflicts. The merchant's token is forwarded
- * for refund; the wallet's owner-only API may reject it. No service-to-service refund
- * authority, return uniqueness/window or durable refund recovery is implemented.
+ * -> local restock/COMPLETED -> event. The original order remains FULFILLED. Domain transition errors become RETURN_STATE conflicts. 
+ * The merchant's token is forwarded for refund; the wallet's owner-only API may reject it. No service-to-service refund authority, return uniqueness/window or durable refund recovery is implemented.
  */
 @Service
 public class ReturnService {
 
-    // Stores and retrieves return requests.
-    private final ReturnRequestRepository returnRequestRepository;
+    
+    private final ReturnRequestRepository returnRequestRepository; // Stores and retrieves return requests.
+    private final CommerceOrderRepository orderRepository; // Used to load the original order.
+    private final ProductRepository productRepository; // Used to retrieve products and restore stock.
+    private final PaymentSettlementService paymentSettlementService; // Reuses the existing payment refund workflow.
+    private final TransactionTemplate transactionTemplate; // Allows the final database operation to be executed programmatically inside a transaction. This is useful here because the external refund is performed separately from the database finalisation.
+    private final CommerceEventPublisher eventPublisher; // Publishes the return-completed domain event.
 
-    // Used to load the original order.
-    private final CommerceOrderRepository orderRepository;
-
-    // Used to retrieve products and restore stock.
-    private final ProductRepository productRepository;
-
-    // Reuses the existing payment refund workflow.
-    private final PaymentSettlementService paymentSettlementService;
-
-    /*
-     * Allows the final database operation to be executed
-     * programmatically inside a transaction.
-     *
-     * This is useful here because the external refund is performed
-     * separately from the database finalisation.
-     */
-    private final TransactionTemplate transactionTemplate;
-
-    // Publishes the return-completed domain event.
-    private final CommerceEventPublisher eventPublisher;
-
-    /*
-     * Constructor injection.
-     *
-     * Spring provides the required dependencies.
-     */
+    // Constructor injection. Spring provides the required dependencies.
     public ReturnService(
             ReturnRequestRepository returnRequestRepository,
             CommerceOrderRepository orderRepository,
@@ -98,181 +72,65 @@ public class ReturnService {
         this.eventPublisher = eventPublisher;
     }
 
-    /*
-     * STEP 1: CUSTOMER REQUESTS A RETURN
-     *
-     * A return can only be requested for an order that has been fulfilled.
-     */
+    // STEP 1: CUSTOMER REQUESTS A RETURN A return can only be requested for an order that has been fulfilled.
     @Transactional
-    public ReturnResponse requestReturn(
-            Long orderId,
-            Long callerUserId,
-            List<Long> callerOrgIds,
-            ReturnRequestBody body
-    ) {
-
+    public ReturnResponse requestReturn(Long orderId, Long callerUserId, List<Long> callerOrgIds, ReturnRequestBody body) {
         CommerceOrder order = requireOrder(orderId, callerUserId, callerOrgIds);
-
         // Only the customer who placed the order can request its return.
         if (!order.getCustomerUserId().equals(callerUserId)) {
-            throw ApiException.forbidden(
-                    "Only the customer can request a return"
-            );
+            throw ApiException.forbidden("Only the customer can request a return");
         }
-
-        // The return process begins only after fulfilment.
         if (order.getStatus() != OrderStatus.FULFILLED) {
-            throw ApiException.conflict(
-                    "RETURN_NOT_ALLOWED",
-                    "Only FULFILLED orders can be returned"
-            );
+            throw ApiException.conflict("RETURN_NOT_ALLOWED", "Only FULFILLED orders can be returned"); // The return process begins only after fulfilment.
         }
 
-        // Create a new return request using the supplied reason.
-        // trim() removes unnecessary leading and trailing spaces.
-        ReturnRequest created = returnRequestRepository.save(
-                new ReturnRequest(
-                        orderId,
-                        callerUserId,
-                        body.reason().trim()
-                )
-        );
-
-        // Convert the saved entity to an API response.
+        ReturnRequest created = returnRequestRepository.save(new ReturnRequest(orderId, callerUserId, body.reason().trim())); // trim() removes unnecessary leading and trailing spaces.
         return ReturnResponse.from(created);
     }
 
-    /*
-     * STEP 2A: APPROVE RETURN
-     *
-     * The organisation approves a customer's return request.
-     */
+    // STEP 2A: APPROVE RETURN The organisation approves a customer's return request.
     @Transactional
-    public ReturnResponse approve(
-            Long returnId,
-            List<Long> callerOrgIds
-    ) {
+    public ReturnResponse approve(Long returnId, List<Long> callerOrgIds) {
 
-        // Load the return request.
-        ReturnRequest request = requireReturn(returnId);
-
-        // Verify that the caller can access the organisation
-        // associated with the original order.
-        requireOrder(request.getOrderId(), null, callerOrgIds);
-
+        ReturnRequest request = requireReturn(returnId); // Load the return request.
+        requireOrder(request.getOrderId(), null, callerOrgIds); // Verify that the caller can access the organisation associated with the original order.
         try {
-            // Delegate the state transition to the domain entity.
-            request.approve();
-
+            request.approve(); // Delegate the state transition to the domain entity.
         } catch (IllegalStateException ex) {
-
-            // Convert an invalid domain transition into an API conflict.
-            throw ApiException.conflict(
-                    "RETURN_STATE",
-                    ex.getMessage()
-            );
+            throw ApiException.conflict("RETURN_STATE", ex.getMessage()); // Convert an invalid domain transition into an API conflict.
         }
-
-        return ReturnResponse.from(returnRequestRepository.save(request));
+        return ReturnResponse.from(returnRequestRepository.save(request)); // Convert the saved entity to an API response.
     }
 
-    /*
-     * STEP 2B: REJECT RETURN
-     *
-     * The organisation rejects the return request.
-     */
+    // STEP 2B: REJECT RETURN The organisation rejects the return request.
     @Transactional
-    public ReturnResponse reject(
-            Long returnId,
-            List<Long> callerOrgIds
-    ) {
-
-        ReturnRequest request = requireReturn(returnId);
-
-        // Verify organisation access using the original order.
-        requireOrder(request.getOrderId(), null, callerOrgIds);
-
+    public ReturnResponse reject(Long returnId, List<Long> callerOrgIds) {
+        ReturnRequest request = requireReturn(returnId); // Load the return request.
+        requireOrder(request.getOrderId(), null, callerOrgIds); // Verify organisation access using the original order.
         try {
-            // Apply the domain-level rejection transition.
-            request.reject();
-
+            request.reject(); // Apply the domain-level rejection transition.
         } catch (IllegalStateException ex) {
-
-            throw ApiException.conflict(
-                    "RETURN_STATE",
-                    ex.getMessage()
-            );
+            throw ApiException.conflict("RETURN_STATE", ex.getMessage()); // Convert an invalid domain transition into an API conflict.
         }
-
-        return ReturnResponse.from(returnRequestRepository.save(request));
+        return ReturnResponse.from(returnRequestRepository.save(request)); // Convert the saved entity to an API response.
     }
 
-    /*
-     * STEP 3: COMPLETE APPROVED RETURN
-     *
-     * This method has two distinct stages:
-     *
-     * 1. Perform the external refund.
-     * 2. Finalise the database changes in a transaction.
-     *
-     * External payment operations should not be assumed to participate
-     * in the local database transaction.
-     */
-    public ReturnResponse complete(
-            Long returnId,
-            List<Long> callerOrgIds,
-            String accessToken
-    ) {
-
-        ReturnRequest request = requireReturn(returnId);
-
-        CommerceOrder order = requireOrder(
-                request.getOrderId(),
-                null,
-                callerOrgIds
-        );
-
-        // Only an approved return can be completed.
+    // STEP 3: COMPLETE APPROVED RETURN This method has two distinct stages: 1. Perform the external refund. 2. Finalise the database changes in a transaction. External payment operations should not be assumed to participate in the local database transaction.
+    public ReturnResponse complete(Long returnId, List<Long> callerOrgIds, String accessToken) {
+        ReturnRequest request = requireReturn(returnId); // Load the return request.
+        CommerceOrder order = requireOrder(request.getOrderId(), null, callerOrgIds); // Verify organisation access using the original order.
         if (request.getStatus() != ReturnStatus.APPROVED) {
-            throw ApiException.conflict(
-                    "RETURN_STATE",
-                    "Only APPROVED returns can be completed"
-            );
+            throw ApiException.conflict("RETURN_STATE", "Only APPROVED returns can be completed"); // Only APPROVED returns can be completed.
         }
-
-        // Attempt the refund through the existing payment service.
-        paymentSettlementService.settleRefund(order, accessToken);
-
-        /*
-         * Execute stock restoration and return completion inside
-         * the configured transaction.
-         *
-         * The callback's result becomes the value returned by execute().
-         */
-        ReturnResponse completed = transactionTemplate.execute(
-                status -> finalizeComplete(returnId)
-        );
-
-        // Publish the event after the transaction callback returns.
-        eventPublisher.publish(
-                CommerceEvents.of(order, CommerceEventType.RETURN_COMPLETED)
-        );
-
+        paymentSettlementService.settleRefund(order, accessToken); // Attempt the refund through the existing payment service.
+        ReturnResponse completed = transactionTemplate.execute(status -> finalizeComplete(returnId)); // Execute stock restoration and return completion inside the configured transaction. The callback's result becomes the value returned by execute().
+        eventPublisher.publish(CommerceEvents.of(order, CommerceEventType.RETURN_COMPLETED)); // Publish the event after the transaction callback returns.
         return completed;
     }
 
-    /*
-     * INTERNAL FINALISATION
-     *
-     * This method is called from the TransactionTemplate callback.
-     *
-     * It restores the stock for each item in the original order
-     * and changes the return request to COMPLETED.
-     */
+    // INTERNAL FINALISATION This method is called from the TransactionTemplate callback. It restores the stock for each item in the original order and changes the return request to COMPLETED.
     private ReturnResponse finalizeComplete(Long returnId) {
-
         ReturnRequest request = requireReturn(returnId);
-
         CommerceOrder order = orderRepository.findById(request.getOrderId())
                 .orElseThrow(() -> ApiException.notFound(
                         "ORDER_NOT_FOUND",
@@ -281,45 +139,25 @@ public class ReturnService {
 
         // Iterate over every item in the original order.
         for (OrderItem item : order.getItems()) {
-
-            // Find the corresponding product.
             Product product = productRepository.findById(item.getProductId())
                     .orElseThrow(() -> ApiException.notFound(
                             "PRODUCT_NOT_FOUND",
                             "Product missing"
                     ));
-
-            // Restore the quantity that was returned.
-            product.releaseStock(item.getQuantity());
+            product.releaseStock(item.getQuantity()); // Restore the quantity that was returned.
         }
 
         try {
-            // Move the return request to COMPLETED.
-            request.complete();
-
+            request.complete(); // Move the return request to COMPLETED.
         } catch (IllegalStateException ex) {
-
-            throw ApiException.conflict(
-                    "RETURN_STATE",
-                    ex.getMessage()
-            );
+            throw ApiException.conflict("RETURN_STATE", ex.getMessage()); // Convert an invalid domain transition into an API conflict.
         }
-
-        // Save the completed return request.
-        return ReturnResponse.from(returnRequestRepository.save(request));
+        return ReturnResponse.from(returnRequestRepository.save(request)); // Convert the saved entity to an API response.
     }
 
-    /*
-     * LIST RETURNS FOR AN ORDER
-     *
-     * Returns are sorted by creation time, newest first.
-     */
+    // LIST RETURNS FOR AN ORDER Returns are sorted by creation time, newest first.
     @Transactional(readOnly = true)
-    public List<ReturnResponse> listForOrder(
-            Long orderId,
-            Long callerUserId,
-            List<Long> callerOrgIds
-    ) {
+    public List<ReturnResponse> listForOrder(Long orderId, Long callerUserId, List<Long> callerOrgIds) {
 
         requireOrder(orderId, callerUserId, callerOrgIds);
 
@@ -331,14 +169,8 @@ public class ReturnService {
                 .toList();
     }
 
-    /*
-     * COMMON ORDER LOOKUP AND ORGANISATION AUTHORISATION
-     */
-    private CommerceOrder requireOrder(
-            Long orderId,
-            Long callerUserId,
-            List<Long> callerOrgIds
-    ) {
+    // COMMON ORDER LOOKUP AND ORGANISATION AUTHORISATION
+    private CommerceOrder requireOrder(Long orderId, Long callerUserId, List<Long> callerOrgIds) {
 
         CommerceOrder order = orderRepository.findById(orderId)
                 .orElseThrow(() -> ApiException.notFound(
@@ -347,15 +179,10 @@ public class ReturnService {
                 ));
 
         requireOrderVisible(order, callerUserId, callerOrgIds);
-
         return order;
     }
 
-    private static void requireOrderVisible(
-            CommerceOrder order,
-            Long callerUserId,
-            List<Long> callerOrgIds
-    ) {
+    private static void requireOrderVisible(CommerceOrder order, Long callerUserId, List<Long> callerOrgIds) {
         if (callerUserId != null && callerUserId.equals(order.getCustomerUserId())) {
             return;
         }
@@ -365,11 +192,8 @@ public class ReturnService {
         throw ApiException.forbidden("No access to order " + order.getOrderId());
     }
 
-    /*
-     * COMMON RETURN REQUEST LOOKUP
-     */
+    // COMMON RETURN REQUEST LOOKUP
     private ReturnRequest requireReturn(Long returnId) {
-
         return returnRequestRepository.findById(returnId)
                 .orElseThrow(() -> ApiException.notFound(
                         "RETURN_NOT_FOUND",

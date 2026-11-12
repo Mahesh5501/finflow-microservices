@@ -19,10 +19,7 @@ public record ReturnResponse(
         Instant createdAt // Time at which the return request was created.
 ) {
 
-    /**
-     * Converts a ReturnRequest entity into a ReturnResponse DTO.
-     * Keeping this mapping method here avoids repeating the same entity-to-response conversion in service methods.
-     */
+    // Converts a ReturnRequest entity into a ReturnResponse DTO. Keeping this mapping method here avoids repeating the same entity-to-response conversion in service methods.
     public static ReturnResponse from(ReturnRequest request) {
         return new ReturnResponse(
                 request.getReturnId(),

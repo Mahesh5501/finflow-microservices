@@ -22,174 +22,81 @@ import java.time.Instant;
  * 3. Enforce valid status changes through domain methods.
  *
  * Returns domain state owned by ReturnService and stored through
- * ReturnRequestRepository. Scalar order/customer IDs avoid a cross-feature JPA graph;
- * they do not create foreign keys. Domain methods permit only REQUESTED approval or
- * rejection and APPROVED completion; ReturnService maps invalid transitions to conflicts.
+ * ReturnRequestRepository. Scalar order/customer IDs avoid a cross-feature JPA graph; they do not create foreign keys. 
+ * Domain methods permit only REQUESTED approval or rejection and APPROVED completion; 
+ * ReturnService maps invalid transitions to conflicts.
  * @Entity/@Table retain return_requests and @Id/IDENTITY select the generated key.
- * Without these mappings ORM discovery/identity fails; a separate persistence model
- * would add duplication without a second storage need. No optimistic version or
- * single-return-per-order constraint exists in this model.
+ * Without these mappings ORM discovery/identity fails; a separate persistence model would add duplication without a second storage need. 
+ * No optimistic version or single-return-per-order constraint exists in this model.
  */
 @Entity
 @Table(name = "return_requests")
 public class ReturnRequest {
 
-    /**
-     * Primary key of the return request.
-     *
-     * @Id marks this field as the primary key.
-     *
-     * @GeneratedValue:
-     * The database generates the ID when a new record is inserted.
-     *
-     * IDENTITY:
-     * Uses the database's identity/auto-increment mechanism.
-     */
+    // Primary key of the return request. @Id marks this field as the primary key. @GeneratedValue: The database generates the ID when a new record is inserted. IDENTITY: Uses the database's identity/auto-increment mechanism.
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "return_id")
     private Long returnId;
 
-    /**
-     * ID of the order for which the return was requested.
-     *
-     * This is stored as a scalar ID rather than a JPA relationship
-     * to CommerceOrder in the current design.
-     */
+    // ID of the order for which the return was requested. This is stored as a scalar ID rather than a JPA relationship to CommerceOrder in the current design.
     @Column(name = "order_id", nullable = false)
     private Long orderId;
 
-    /**
-     * ID of the customer who submitted the return request.
-     */
+    // ID of the customer who submitted the return request.
     @Column(name = "customer_user_id", nullable = false)
     private Long customerUserId;
-
-    /**
-     * Customer's explanation for requesting a return.
-     *
-     * Database column is mandatory and limited to 500 characters.
-     */
+    // Customer's explanation for requesting a return. Database column is mandatory and limited to 500 characters.
     @Column(nullable = false, length = 500)
     private String reason;
 
-    /**
-     * Current lifecycle status of the return request.
-     *
-     * EnumType.STRING stores values such as:
-     * REQUESTED, APPROVED, REJECTED, COMPLETED.
-     *
-     * STRING is safer than ORDINAL because changing enum order
-     * does not silently change the meaning of stored values.
-     */
+    // Current lifecycle status of the return request. EnumType.STRING stores values such as: REQUESTED, APPROVED, REJECTED, COMPLETED. STRING is safer than ORDINAL because changing enum order does not silently change the meaning of stored values.
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private ReturnStatus status;
 
-    /**
-     * Time when the return request was created.
-     *
-     * Instant represents a point in time using UTC.
-     */
+    // Time when the return request was created. Instant represents a point in time using UTC.
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    /**
-     * Protected no-argument constructor required by JPA.
-     *
-     * JPA uses it when loading an entity from the database.
-     *
-     * Protected prevents ordinary application code from
-     * directly creating an empty ReturnRequest.
-     */
+    // Protected no-argument constructor required by JPA. JPA uses it when loading an entity from the database. Protected prevents ordinary application code from directly creating an empty ReturnRequest.
     protected ReturnRequest() {
     }
 
-    /**
-     * Creates a new return request.
-     *
-     * New return requests always start in REQUESTED status.
-     */
-    public ReturnRequest(
-            Long orderId,
-            Long customerUserId,
-            String reason
-    ) {
-
+    // Creates a new return request. New return requests always start in REQUESTED status.
+    public ReturnRequest(Long orderId, Long customerUserId, String reason) {
         this.orderId = orderId;
         this.customerUserId = customerUserId;
         this.reason = reason;
-
-        // Every new return starts in the REQUESTED state.
-        this.status = ReturnStatus.REQUESTED;
-
-        // Record creation time.
-        this.createdAt = Instant.now();
+        this.status = ReturnStatus.REQUESTED; // Every new return starts in the REQUESTED state.
+        this.createdAt = Instant.now(); // Record creation time.
     }
 
-    /**
-     * Approves a return request.
-     *
-     * Only REQUESTED returns can be approved.
-     *
-     * Invalid transition:
-     * APPROVED -> APPROVED
-     * REJECTED -> APPROVED
-     * COMPLETED -> APPROVED
-     */
+    // Approves a return request. Only REQUESTED returns can be approved. Invalid transition: APPROVED -> APPROVED REJECTED -> APPROVED COMPLETED -> APPROVED
     public void approve() {
-
         if (status != ReturnStatus.REQUESTED) {
-            throw new IllegalStateException(
-                    "Only REQUESTED returns can be approved"
-            );
+            throw new IllegalStateException("Only REQUESTED returns can be approved");
         }
-
         this.status = ReturnStatus.APPROVED;
     }
 
-    /**
-     * Completes an approved return.
-     *
-     * This method is called after the refund flow succeeds
-     * and the return completion process is finalized.
-     *
-     * Only APPROVED returns can be completed.
-     */
+    // Completes an approved return. This method is called after the refund flow succeeds and the return completion process is finalized. Only APPROVED returns can be completed.
     public void complete() {
-
         if (status != ReturnStatus.APPROVED) {
-            throw new IllegalStateException(
-                    "Only APPROVED returns can be completed"
-            );
+            throw new IllegalStateException("Only APPROVED returns can be completed");
         }
-
-        this.status = ReturnStatus.COMPLETED;
+        this.status = ReturnStatus.COMPLETED; // Complete the return request.
     }
 
-    /**
-     * Rejects a return request.
-     *
-     * Only REQUESTED returns can be rejected.
-     */
+    // Rejects a return request. Only REQUESTED returns can be rejected.
     public void reject() {
-
-        if (status != ReturnStatus.REQUESTED) {
-            throw new IllegalStateException(
-                    "Only REQUESTED returns can be rejected"
-            );
+        if (status != ReturnStatus.REQUESTED) { // Only REQUESTED returns can be rejected.
+            throw new IllegalStateException("Only REQUESTED returns can be rejected");
         }
-
-        this.status = ReturnStatus.REJECTED;
+        this.status = ReturnStatus.REJECTED; // Reject the return request.
     }
 
-    /*
-     * Getters
-     *
-     * These expose entity values without allowing callers
-     * to directly change the entity's fields.
-     */
-
+    // Getters. These expose entity values without allowing callers to directly change the entity's fields.
     public Long getReturnId() {
         return returnId;
     }
