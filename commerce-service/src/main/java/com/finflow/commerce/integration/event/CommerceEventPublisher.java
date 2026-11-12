@@ -9,14 +9,9 @@ package com.finflow.commerce.integration.event;
  */
 public interface CommerceEventPublisher {
 
-    /**
-     * Publishes a CommerceDomainEvent.
-     * The implementation decides how and where the event is delivered.
-     * Current implementations:
-     * - Logging publisher writes an event to application logs.
-     * - Kafka publisher sends an event to a Kafka topic.
-     * The current contract returns void, so callers do not receive a delivery acknowledgement or asynchronous result.
-     * @param event event data to publish
-     */
+    // Publishes a CommerceDomainEvent. The implementation decides how and where the event is delivered. 
+    // Current implementations: Logging publisher writes an event to application logs. 
+    // Kafka publisher sends an event to a Kafka topic. 
+    // The current contract returns void, so callers do not receive a delivery acknowledgement or asynchronous result.
     void publish(CommerceDomainEvent event);
 }

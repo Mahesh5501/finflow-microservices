@@ -18,18 +18,10 @@ import org.springframework.stereotype.Component;
 )
 public class LoggingCommerceEventPublisher implements CommerceEventPublisher {
 
-    /**
-     * Logger associated with this class.
-     * SLF4J provides a common logging API. The actual logging implementation is selected by the application.
-     * static: one logger reference is shared by all instances. final: the reference cannot be reassigned.
-     */
+    // Logger associated with this class. SLF4J provides a common logging API. The actual logging implementation is selected by the application. static: one logger reference is shared by all instances. final: the reference cannot be reassigned.
     private static final Logger log = LoggerFactory.getLogger(LoggingCommerceEventPublisher.class); // Logger associated with this class.
 
-    /**
-     * Publishes an event by writing selected event fields to the log.
-     * This is not durable message delivery. The event is not stored in Kafka or another message broker.
-     * @param event the Commerce domain event to publish
-     */
+    // Publishes an event by writing selected event fields to the log. This is not durable message delivery. The event is not stored in Kafka or another message broker.
     @Override
     public void publish(CommerceDomainEvent event) {
         log.info(

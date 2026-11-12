@@ -30,10 +30,7 @@ import java.util.Map;
 )
 public class KafkaEventConfig {
 
-    /**
-     * Creates KafkaAdmin.
-     * KafkaAdmin connects to the Kafka cluster and manages Kafka administrative operations, such as topic creation.
-     */
+    // Creates KafkaAdmin. KafkaAdmin connects to the Kafka cluster and manages Kafka administrative operations, such as topic creation.
     @Bean
     KafkaAdmin kafkaAdmin(@Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) { // Address of the Kafka cluster.
         return new KafkaAdmin(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)); // KafkaAdmin requires the Kafka bootstrap-server address.
@@ -48,10 +45,7 @@ public class KafkaEventConfig {
         props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false); // Do not add Spring type-information headers to JSON messages.
         return new DefaultKafkaProducerFactory<>(props); // Create the Kafka producer factory with these properties.
     }
-    /**
-     * Creates the KafkaTemplate used by KafkaCommerceEventPublisher.
-     * The template uses the producer factory defined above.
-     */
+    // Creates the KafkaTemplate used by KafkaCommerceEventPublisher. The template uses the producer factory defined above.
     @Bean
     KafkaTemplate<String, CommerceDomainEvent>
     commerceEventKafkaTemplate(
@@ -60,10 +54,7 @@ public class KafkaEventConfig {
         return new KafkaTemplate<>(commerceEventProducerFactory); // Create the Kafka template with the producer factory.
     }
 
-    /**
-     * Declares the Commerce events topic.
-     * KafkaAdmin can create this topic when it connects to the Kafka cluster and topic creation is permitted.
-     */
+    // Declares the Commerce events topic. KafkaAdmin can create this topic when it connects to the Kafka cluster and topic creation is permitted.
     @Bean
     NewTopic commerceEventsTopic(@Value("${commerce.events.topic:commerce.events}") String topic) { // Configurable topic name.
         return TopicBuilder.name(topic).partitions(3).replicas(1).build(); // Topic configuration: Configurable topic name, three partitions, one replica.
