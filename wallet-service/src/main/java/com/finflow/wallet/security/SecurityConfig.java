@@ -1,5 +1,6 @@
 package com.finflow.wallet.security;
 
+import com.finflow.wallet.security.WalletProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -14,9 +15,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * Wallet APIs require a valid identity JWT + permission claims.
  *
  * <pre>
- * wallets:read   → GET wallet / history / transfer
- * wallets:write  → create / deposit / withdraw / block / unblock / close
- * transfers:create → P2P transfer
+ * Permission strings come from {@code wallet.security.read-permission} and
+ * {@code wallet.security.write-permission} in configuration.
  * </pre>
  */
 @Configuration
@@ -24,13 +24,17 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final WalletProperties walletProperties;
 
-    public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter, WalletProperties walletProperties) {
         this.jwtAuthFilter = jwtAuthFilter;
+        this.walletProperties = walletProperties;
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        String readPermission = walletProperties.getSecurity().getReadPermission();
+        String writePermission = walletProperties.getSecurity().getWritePermission();
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
@@ -40,12 +44,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers(HttpMethod.GET,
+                                "/api/v1/customer/wallet/**",
                                 "/api/v1/wallets/**",
-                                "/api/v1/users/**",
-                                "/api/v1/transfers/**"
-                        ).hasAuthority("wallets:read")
-                        .requestMatchers(HttpMethod.POST, "/api/v1/transfers").hasAuthority("transfers:create")
-                        .requestMatchers(HttpMethod.POST, "/api/v1/**").hasAuthority("wallets:write")
+                                "/api/v1/users/**"
+                        ).hasAuthority(readPermission)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/**").hasAuthority(writePermission)
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex

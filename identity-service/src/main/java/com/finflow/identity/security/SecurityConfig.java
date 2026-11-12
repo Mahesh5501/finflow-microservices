@@ -1,7 +1,7 @@
 package com.finflow.identity.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.finflow.identity.security.authentication.JwtAuthFilter;
+import com.finflow.identity.security.JwtAuthFilter;
 import com.finflow.identity.security.ratelimit.RateLimitFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;

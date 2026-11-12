@@ -12,6 +12,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Map;
 
 /**
@@ -95,7 +96,7 @@ public class WalletPaymentGateway implements PaymentGateway {
             // The same idempotency key must be reused for retries of this logical payment operation.
             TransactionView tx = withdraw(
                     wallet.walletId(),
-                    request.amount(),
+                    toWalletMoney(request.amount()),
                     request.idempotencyKey(),
                     request.accessToken()
             );
@@ -151,7 +152,7 @@ public class WalletPaymentGateway implements PaymentGateway {
             // Deposit the refund amount into the wallet.
             TransactionView tx = deposit(
                     walletId,
-                    request.amount(),
+                    toWalletMoney(request.amount()),
                     request.idempotencyKey(),
                     request.accessToken()
             );
@@ -361,6 +362,14 @@ public class WalletPaymentGateway implements PaymentGateway {
         return accessToken.startsWith("Bearer ")
                 ? accessToken
                 : "Bearer " + accessToken;
+    }
+
+    /** Commerce orders use scale 4; wallet ledger uses scale 2 (HALF_UP). */
+    private static BigDecimal toWalletMoney(BigDecimal commerceAmount) {
+        if (commerceAmount == null) {
+            throw new IllegalArgumentException("amount is required");
+        }
+        return commerceAmount.setScale(2, RoundingMode.HALF_UP);
     }
 
     /**

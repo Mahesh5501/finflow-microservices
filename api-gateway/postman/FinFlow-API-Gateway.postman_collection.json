@@ -350,7 +350,7 @@
                 "value": "authorization,content-type,idempotency-key"
               }
             ],
-            "url": "{{gatewayBaseUrl}}/api/v1/customer/orders",
+            "url": "{{gatewayBaseUrl}}/api/v1/orders",
             "auth": {
               "type": "noauth"
             },
@@ -457,7 +457,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{gatewayBaseUrl}}/api/v1/customer/products?organisationId=1",
+            "url": "{{gatewayBaseUrl}}/api/v1/products?organisationId=1",
             "auth": {
               "type": "noauth"
             },

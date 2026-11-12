@@ -5,7 +5,7 @@ Baseline: existing 2026-11-07 implementation assessment. These are documented im
 | Caller/producer -> provider/consumer | Mechanism / contract | State and impact when changing |
 |---|---|---|
 | Gateway -> identity | HTTP auth/org/user-me routes; public JWKS | Configured; identity contract changes may affect edge routes/security and clients |
-| Gateway -> wallet | HTTP wallets/transfers and users/{userId}/wallet | Configured; preserve route distinctions from identity /users/me |
+| Gateway -> wallet | HTTP `/customer/wallet/**`, `/wallets/**`, `/users/{userId}/wallet` | Configured; preserve route distinctions from identity `/users/me` |
 | Gateway -> commerce | HTTP products/categories/carts/coupons/orders/returns | Configured; check edge routing when path families change |
 | Gateway -> notification | HTTP notifications paths | Configured; inbox requires bearer token |
 | Gateway, wallet, commerce, notification -> identity | HTTP GET /.well-known/jwks.json; RS256 JWT sub/email/permissions, orgIds where consumed | Gateway resource server; other services custom cached JWKS. Signing key/kid now persist via a configured identity key file; replicas must share the same provisioned key. Public JWKS/claims unchanged; no live cross-service HTTP restart test evidence |

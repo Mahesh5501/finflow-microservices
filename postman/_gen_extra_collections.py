@@ -483,6 +483,8 @@ def update_environment() -> None:
         "txDepositKey",
         "txWithdrawKey",
         "txTransferKey",
+        "transferId",
+        "transferKey",
     ):
         if drop in by_key:
             values[:] = [v for v in values if v["key"] != drop]

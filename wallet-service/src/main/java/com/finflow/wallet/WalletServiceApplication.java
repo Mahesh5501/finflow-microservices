@@ -1,8 +1,10 @@
 package com.finflow.wallet;
 
 import org.springframework.boot.SpringApplication;
+import com.finflow.wallet.security.WalletProperties;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 /**
  * Entry point for FinFlow <b>wallet-service</b> (balance authority).
@@ -18,6 +20,7 @@ import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServic
  * <p>Keep business logic out of this class — it only boots the Spring context.
  */
 @SpringBootApplication(exclude = UserDetailsServiceAutoConfiguration.class)
+@EnableConfigurationProperties(WalletProperties.class)
 public class WalletServiceApplication {
 
     public static void main(String[] args) {

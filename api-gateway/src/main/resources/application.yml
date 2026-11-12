@@ -150,9 +150,7 @@ spring.cloud.gateway.server.webflux:
     # --------------------------------------------------------
 
     # Handles all APIs owned by Wallet Service:
-    # - User-to-wallet lookup
-    # - Wallet operations
-    # - Money transfers
+    # - /customer/wallet shopper API, user-to-wallet lookup, deposits/withdrawals/top-ups
     - id: wallet
       uri: ${wallet.uri}
       predicates:
@@ -160,8 +158,7 @@ spring.cloud.gateway.server.webflux:
         # Examples:
         # /api/v1/wallets/42
         # /api/v1/wallets/42/deposits
-        # /api/v1/transfers/1001
-        - Path=/api/v1/users/*/wallet,/api/v1/wallets/**,/api/v1/transfers/**
+        - Path=/api/v1/customer/wallet/**,/api/v1/users/*/wallet,/api/v1/wallets/**
       filters:
         - name: CircuitBreaker
           args:

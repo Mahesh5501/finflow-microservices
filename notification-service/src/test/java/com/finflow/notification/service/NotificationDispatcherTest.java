@@ -1,8 +1,8 @@
 package com.finflow.notification.service;
 
-import com.finflow.notification.dto.NotificationResponse;
-import com.finflow.notification.event.CommerceDomainEvent;
-import com.finflow.notification.event.CommerceEventType;
+import com.finflow.notification.notification.dto.NotificationResponse;
+import com.finflow.notification.integration.event.CommerceDomainEvent;
+import com.finflow.notification.integration.event.CommerceEventType;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

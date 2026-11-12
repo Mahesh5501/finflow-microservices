@@ -1,9 +1,9 @@
 package com.finflow.identity.security;
 
-import com.finflow.identity.security.jwt.JwtService;
+import com.finflow.identity.security.JwtService;
 import com.finflow.identity.security.ratelimit.RateLimitService;
-import com.finflow.identity.dto.response.RegisterResponse;
-import com.finflow.identity.service.AuthService;
+import com.finflow.identity.auth.dto.RegisterResponse;
+import com.finflow.identity.auth.application.AuthService;
 import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

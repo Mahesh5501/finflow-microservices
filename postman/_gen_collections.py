@@ -70,8 +70,8 @@ def main(*, identity_only=False) -> None:
                 "Happy path:\n"
                 "1. Auth: Register → Verify Email → Login\n"
                 "   (If already registered but unverified: skip Register, run **1b. Resend verification** → Verify Email → Login)\n"
-                "2. Orgs: Create Org → **1b. Login again** (JWT gets wallets:* permissions)\n"
-                "3. Switch to Wallet collection — same {{accessToken}} / {{userId}}\n\n"
+                "2. Optional: Organizations (merchant admins)\n"
+                "3. Wallet collection — same {{accessToken}}; shopper APIs need wallet:read / wallet:write on JWT (email verified)\n\n"
                 "URLs use {{identityBaseUrl}} = http://localhost:18081"
             ),
             "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
@@ -95,18 +95,43 @@ def main(*, identity_only=False) -> None:
         ],
         "item": [
             {
-                "name": "Auth",
+                "name": "Auth (auth.api)",
+                "description": "AuthController + JwksController",
                 "item": [
                     {
-                        "name": "0. JWKS (public)",
-                        "request": {
-                            "method": "GET",
-                            "header": [],
-                            "url": "{{identityBaseUrl}}/.well-known/jwks.json",
-                        },
+                        "name": "Public",
+                        "item": [],
                     },
                     {
-                        "name": "1. Register",
+                        "name": "Authenticated",
+                        "item": [],
+                    },
+                ],
+            },
+            {
+                "name": "Organizations (organization.api)",
+                "description": "OrgController — /api/v1/orgs/**",
+                "item": [],
+            },
+        ],
+    }
+
+    auth_public = identity["item"][0]["item"][0]["item"]
+    auth_authenticated = identity["item"][0]["item"][1]["item"]
+    org_items = identity["item"][1]["item"]
+
+    auth_public.extend(
+        [
+            {
+                "name": "JWKS",
+                "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "{{identityBaseUrl}}/.well-known/jwks.json",
+                },
+            },
+            {
+                "name": "Register",
                         "event": [
                             {
                                 "listen": "test",
@@ -133,7 +158,7 @@ def main(*, identity_only=False) -> None:
                         },
                     },
                     {
-                        "name": "1b. Resend verification",
+                "name": "Resend verification",
                         "event": [
                             {
                                 "listen": "test",
@@ -159,7 +184,7 @@ def main(*, identity_only=False) -> None:
                         },
                     },
                     {
-                        "name": "2. Verify Email",
+                "name": "Verify email",
                         "request": {
                             "method": "POST",
                             "header": json_ct(),
@@ -171,7 +196,7 @@ def main(*, identity_only=False) -> None:
                         },
                     },
                     {
-                        "name": "3. Login",
+                "name": "Login",
                         "event": [
                             {
                                 "listen": "test",
@@ -191,16 +216,8 @@ def main(*, identity_only=False) -> None:
                             "url": "{{identityBaseUrl}}/api/v1/auth/login",
                         },
                     },
-                    {
-                        "name": "4. Me",
-                        "request": {
-                            "method": "GET",
-                            "header": auth("accessToken"),
-                            "url": "{{identityBaseUrl}}/api/v1/users/me",
-                        },
-                    },
-                    {
-                        "name": "5. Refresh",
+            {
+                "name": "Refresh",
                         "event": [
                             {
                                 "listen": "test",
@@ -221,7 +238,7 @@ def main(*, identity_only=False) -> None:
                         },
                     },
                     {
-                        "name": "6. Forgot Password",
+                "name": "Forgot password",
                         "event": [
                             {
                                 "listen": "test",
@@ -247,7 +264,7 @@ def main(*, identity_only=False) -> None:
                         },
                     },
                     {
-                        "name": "7. Reset Password",
+                "name": "Reset password",
                         "request": {
                             "method": "POST",
                             "header": json_ct(),
@@ -258,20 +275,8 @@ def main(*, identity_only=False) -> None:
                             "url": "{{identityBaseUrl}}/api/v1/auth/reset-password",
                         },
                     },
-                    {
-                        "name": "8. Change Password",
-                        "request": {
-                            "method": "POST",
-                            "header": auth("accessToken") + json_ct(),
-                            "body": {
-                                "mode": "raw",
-                                "raw": '{\n  "currentPassword": "{{password}}",\n  "newPassword": "{{password}}"\n}',
-                            },
-                            "url": "{{identityBaseUrl}}/api/v1/auth/change-password",
-                        },
-                    },
-                    {
-                        "name": "9. Logout",
+            {
+                "name": "Logout",
                         "request": {
                             "method": "POST",
                             "header": json_ct(),
@@ -281,14 +286,42 @@ def main(*, identity_only=False) -> None:
                             },
                             "url": "{{identityBaseUrl}}/api/v1/auth/logout",
                         },
-                    },
-                ],
+            },
+        ]
+    )
+
+    auth_authenticated.extend(
+        [
+            {
+                "name": "Me",
+                "request": {
+                    "method": "GET",
+                    "header": auth("accessToken"),
+                    "url": "{{identityBaseUrl}}/api/v1/users/me",
+                },
             },
             {
-                "name": "Organisations",
+                "name": "Change password",
+                "request": {
+                    "method": "POST",
+                    "header": auth("accessToken") + json_ct(),
+                    "body": {
+                        "mode": "raw",
+                        "raw": '{\n  "currentPassword": "{{password}}",\n  "newPassword": "{{password}}"\n}',
+                    },
+                    "url": "{{identityBaseUrl}}/api/v1/auth/change-password",
+                },
+            },
+        ]
+    )
+
+    org_items.extend(
+        [
+            {
+                "name": "Org",
                 "item": [
                     {
-                        "name": "1. Create Org",
+                        "name": "Create org",
                         "event": [
                             {
                                 "listen": "test",
@@ -314,28 +347,7 @@ def main(*, identity_only=False) -> None:
                         },
                     },
                     {
-                        "name": "1b. Login again (wallet permissions in JWT)",
-                        "event": [
-                            {
-                                "listen": "test",
-                                "script": {
-                                    "type": "text/javascript",
-                                    "exec": save_tokens(True),
-                                },
-                            }
-                        ],
-                        "request": {
-                            "method": "POST",
-                            "header": json_ct(),
-                            "body": {
-                                "mode": "raw",
-                                "raw": '{\n  "email": "{{email}}",\n  "password": "{{password}}"\n}',
-                            },
-                            "url": "{{identityBaseUrl}}/api/v1/auth/login",
-                        },
-                    },
-                    {
-                        "name": "2. List My Orgs",
+                        "name": "List my orgs",
                         "request": {
                             "method": "GET",
                             "header": auth("accessToken"),
@@ -343,7 +355,105 @@ def main(*, identity_only=False) -> None:
                         },
                     },
                     {
-                        "name": "3. Register Member (user B)",
+                        "name": "Get org",
+                        "request": {
+                            "method": "GET",
+                            "header": auth("accessToken"),
+                            "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}",
+                        },
+                    },
+                ],
+            },
+            {
+                "name": "Members & invites",
+                "item": [
+                    {
+                        "name": "Invite member",
+                        "event": [
+                            {
+                                "listen": "test",
+                                "script": {
+                                    "type": "text/javascript",
+                                    "exec": [
+                                        "if (pm.response.code === 201) {",
+                                        "  const body = pm.response.json();",
+                                        "  if (body.token) { pm.collectionVariables.set('inviteToken', body.token); pm.environment.set('inviteToken', body.token); }",
+                                        "}",
+                                    ],
+                                },
+                            }
+                        ],
+                        "request": {
+                            "method": "POST",
+                            "header": auth("accessToken") + json_ct(),
+                            "body": {
+                                "mode": "raw",
+                                "raw": '{\n  "email": "{{memberEmail}}",\n  "role": "FINANCE_OPERATOR"\n}',
+                            },
+                            "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/invites",
+                        },
+                    },
+                    {
+                        "name": "Accept invite (member Bearer)",
+                        "request": {
+                            "method": "POST",
+                            "header": auth("accessToken2") + json_ct(),
+                            "body": {
+                                "mode": "raw",
+                                "raw": '{\n  "token": "{{inviteToken}}"\n}',
+                            },
+                            "url": "{{identityBaseUrl}}/api/v1/orgs/invites/accept",
+                        },
+                    },
+                    {
+                        "name": "List members",
+                        "request": {
+                            "method": "GET",
+                            "header": auth("accessToken"),
+                            "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/members",
+                        },
+                    },
+                    {
+                        "name": "Change member role",
+                        "request": {
+                            "method": "PUT",
+                            "header": auth("accessToken") + json_ct(),
+                            "body": {
+                                "mode": "raw",
+                                "raw": '{\n  "role": "MEMBER"\n}',
+                            },
+                            "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/members/{{userId2}}/role",
+                        },
+                    },
+                    {
+                        "name": "Remove member",
+                        "request": {
+                            "method": "DELETE",
+                            "header": auth("accessToken"),
+                            "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/members/{{userId2}}",
+                        },
+                    },
+                ],
+            },
+            {
+                "name": "Audit",
+                "item": [
+                    {
+                        "name": "Org audit log",
+                        "request": {
+                            "method": "GET",
+                            "header": auth("accessToken"),
+                            "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/audit",
+                        },
+                    },
+                ],
+            },
+            {
+                "name": "Demo — second user (optional)",
+                "description": "Registers {{memberEmail}}, logs in as member, then run Members & invites.",
+                "item": [
+                    {
+                        "name": "Register member (user B)",
                         "event": [
                             {
                                 "listen": "test",
@@ -370,7 +480,7 @@ def main(*, identity_only=False) -> None:
                         },
                     },
                     {
-                        "name": "4. Verify Member Email",
+                        "name": "Verify member email",
                         "request": {
                             "method": "POST",
                             "header": json_ct(),
@@ -382,33 +492,7 @@ def main(*, identity_only=False) -> None:
                         },
                     },
                     {
-                        "name": "5. Invite Member",
-                        "event": [
-                            {
-                                "listen": "test",
-                                "script": {
-                                    "type": "text/javascript",
-                                    "exec": [
-                                        "if (pm.response.code === 201) {",
-                                        "  const body = pm.response.json();",
-                                        "  if (body.token) { pm.collectionVariables.set('inviteToken', body.token); pm.environment.set('inviteToken', body.token); }",
-                                        "}",
-                                    ],
-                                },
-                            }
-                        ],
-                        "request": {
-                            "method": "POST",
-                            "header": auth("accessToken") + json_ct(),
-                            "body": {
-                                "mode": "raw",
-                                "raw": '{\n  "email": "{{memberEmail}}",\n  "role": "FINANCE_OPERATOR"\n}',
-                            },
-                            "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/invites",
-                        },
-                    },
-                    {
-                        "name": "6. Member Login (before accept)",
+                        "name": "Member login",
                         "event": [
                             {
                                 "listen": "test",
@@ -428,73 +512,175 @@ def main(*, identity_only=False) -> None:
                             "url": "{{identityBaseUrl}}/api/v1/auth/login",
                         },
                     },
+                ],
+            },
+        ]
+    )
+
+    save_wallet_a = [
+        "if (pm.response.code === 200 || pm.response.code === 201) {",
+        "  const body = pm.response.json();",
+        "  if (body.walletId != null) { pm.collectionVariables.set('walletId', String(body.walletId)); pm.environment.set('walletId', String(body.walletId)); }",
+        "  if (body.userId != null) { pm.collectionVariables.set('userId', String(body.userId)); pm.environment.set('userId', String(body.userId)); }",
+        "}",
+    ]
+    save_wallet_b = [
+        "if (pm.response.code === 200 || pm.response.code === 201) {",
+        "  const body = pm.response.json();",
+        "  if (body.walletId != null) { pm.collectionVariables.set('walletId2', String(body.walletId)); pm.environment.set('walletId2', String(body.walletId)); }",
+        "}",
+    ]
+
+    customer_folder = {
+        "name": "Customer (customer.api)",
+        "description": "CustomerWalletController — /api/v1/customer/wallet/** (wallet:read / wallet:write)",
+        "item": [
+            {
+                "name": "Open wallet",
+                "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": save_wallet_a}}],
+                "request": {
+                    "method": "POST",
+                    "header": auth("accessToken") + json_ct(),
+                    "body": {"mode": "raw", "raw": '{\n  "currency": "INR"\n}'},
+                    "url": "{{walletBaseUrl}}/api/v1/customer/wallet",
+                },
+            },
+            {
+                "name": "Get my wallet",
+                "request": {
+                    "method": "GET",
+                    "header": auth("accessToken"),
+                    "url": "{{walletBaseUrl}}/api/v1/customer/wallet",
+                },
+            },
+            {
+                "name": "Top up",
+                "request": {
+                    "method": "POST",
+                    "header": auth("accessToken") + json_ct() + idem("topUpKey"),
+                    "body": {"mode": "raw", "raw": '{\n  "amount": "500.00",\n  "paymentMethod": "UPI",\n  "paymentReference": "pg-demo-001"\n}'},
+                    "url": "{{walletBaseUrl}}/api/v1/customer/wallet/top-ups",
+                },
+            },
+            {
+                "name": "List my transactions",
+                "request": {
+                    "method": "GET",
+                    "header": auth("accessToken"),
+                    "url": "{{walletBaseUrl}}/api/v1/customer/wallet/transactions",
+                },
+            },
+        ],
+    }
+
+    integration_folder = {
+        "name": "Integration (integration.api)",
+        "description": "IntegrationWalletController — commerce / ops (same JWT; wallet:write for money moves)",
+        "item": [
+            {
+                "name": "Prerequisites",
+                "description": "Open customer wallet first so {{walletId}} is set.",
+                "item": [
                     {
-                        "name": "7. Accept Invite (as member)",
+                        "name": "Open wallet B (accessToken2)",
+                        "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": save_wallet_b}}],
                         "request": {
                             "method": "POST",
                             "header": auth("accessToken2") + json_ct(),
-                            "body": {
-                                "mode": "raw",
-                                "raw": '{\n  "token": "{{inviteToken}}"\n}',
-                            },
-                            "url": "{{identityBaseUrl}}/api/v1/orgs/invites/accept",
+                            "body": {"mode": "raw", "raw": '{\n  "currency": "INR"\n}'},
+                            "url": "{{walletBaseUrl}}/api/v1/customer/wallet",
+                        },
+                    },
+                ],
+            },
+            {
+                "name": "Read",
+                "item": [
+                    {
+                        "name": "Get wallet by user id",
+                        "request": {
+                            "method": "GET",
+                            "header": auth("accessToken"),
+                            "url": "{{walletBaseUrl}}/api/v1/users/{{userId}}/wallet",
                         },
                     },
                     {
-                        "name": "7b. Member Login again (wallet permissions → accessToken2)",
-                        "event": [
-                            {
-                                "listen": "test",
-                                "script": {
-                                    "type": "text/javascript",
-                                    "exec": save_tokens(False),
-                                },
-                            }
-                        ],
+                        "name": "Get wallet by wallet id",
+                        "request": {
+                            "method": "GET",
+                            "header": auth("accessToken"),
+                            "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}",
+                        },
+                    },
+                    {
+                        "name": "List transactions",
+                        "request": {
+                            "method": "GET",
+                            "header": auth("accessToken"),
+                            "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/transactions",
+                        },
+                    },
+                ],
+            },
+            {
+                "name": "Money moves",
+                "item": [
+                    {
+                        "name": "Deposit (refund / credit)",
                         "request": {
                             "method": "POST",
-                            "header": json_ct(),
-                            "body": {
-                                "mode": "raw",
-                                "raw": '{\n  "email": "{{memberEmail}}",\n  "password": "{{memberPassword}}"\n}',
-                            },
-                            "url": "{{identityBaseUrl}}/api/v1/auth/login",
+                            "header": auth("accessToken") + json_ct() + idem("depositKey"),
+                            "body": {"mode": "raw", "raw": '{\n  "amount": "100.00"\n}'},
+                            "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/deposits",
                         },
                     },
                     {
-                        "name": "8. List Members",
+                        "name": "Withdraw (checkout / debit)",
+                        "request": {
+                            "method": "POST",
+                            "header": auth("accessToken") + json_ct() + idem("withdrawKey"),
+                            "body": {"mode": "raw", "raw": '{\n  "amount": "10.00"\n}'},
+                            "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/withdrawals",
+                        },
+                    },
+                ],
+            },
+            {
+                "name": "Negative cases",
+                "item": [
+                    {
+                        "name": "No token (401)",
                         "request": {
                             "method": "GET",
-                            "header": auth("accessToken"),
-                            "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/members",
+                            "header": [],
+                            "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}",
                         },
                     },
                     {
-                        "name": "9. Change Member Role",
+                        "name": "Invalid currency (400)",
                         "request": {
-                            "method": "PUT",
+                            "method": "POST",
                             "header": auth("accessToken") + json_ct(),
-                            "body": {
-                                "mode": "raw",
-                                "raw": '{\n  "role": "MEMBER"\n}',
-                            },
-                            "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/members/{{userId2}}/role",
+                            "body": {"mode": "raw", "raw": '{\n  "currency": "XYZ"\n}'},
+                            "url": "{{walletBaseUrl}}/api/v1/customer/wallet",
                         },
                     },
                     {
-                        "name": "10. Org Audit Log",
+                        "name": "Insufficient balance (422)",
                         "request": {
-                            "method": "GET",
-                            "header": auth("accessToken"),
-                            "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/audit",
+                            "method": "POST",
+                            "header": auth("accessToken") + json_ct() + [{"key": "Idempotency-Key", "value": "withdraw-too-much-001"}],
+                            "body": {"mode": "raw", "raw": '{\n  "amount": "999999.00"\n}'},
+                            "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/withdrawals",
                         },
                     },
                     {
-                        "name": "11. Remove Member",
+                        "name": "Missing Idempotency-Key (400)",
                         "request": {
-                            "method": "DELETE",
-                            "header": auth("accessToken"),
-                            "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/members/{{userId2}}",
+                            "method": "POST",
+                            "header": auth("accessToken") + json_ct(),
+                            "body": {"mode": "raw", "raw": '{\n  "amount": "10.00"\n}'},
+                            "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/deposits",
                         },
                     },
                 ],
@@ -502,207 +688,15 @@ def main(*, identity_only=False) -> None:
         ],
     }
 
-    wallet_items = [
-        {
-            "name": "1. Create Wallet A",
-            "event": [
-                {
-                    "listen": "test",
-                    "script": {
-                        "type": "text/javascript",
-                        "exec": [
-                            "if (pm.response.code === 201) {",
-                            "  const body = pm.response.json();",
-                            "  if (body.walletId != null) { pm.collectionVariables.set('walletId', String(body.walletId)); pm.environment.set('walletId', String(body.walletId)); }",
-                            "  if (body.userId != null) { pm.collectionVariables.set('userId', String(body.userId)); pm.environment.set('userId', String(body.userId)); }",
-                            "}",
-                        ],
-                    },
-                }
-            ],
-            "request": {
-                "method": "POST",
-                "header": auth("accessToken") + json_ct(),
-                "body": {"mode": "raw", "raw": '{\n  "currency": "INR"\n}'},
-                "url": "{{walletBaseUrl}}/api/v1/wallets",
-            },
-        },
-        {
-            "name": "2. Create Wallet B (accessToken2)",
-            "event": [
-                {
-                    "listen": "test",
-                    "script": {
-                        "type": "text/javascript",
-                        "exec": [
-                            "if (pm.response.code === 201) {",
-                            "  const body = pm.response.json();",
-                            "  if (body.walletId != null) { pm.collectionVariables.set('walletId2', String(body.walletId)); pm.environment.set('walletId2', String(body.walletId)); }",
-                            "}",
-                        ],
-                    },
-                }
-            ],
-            "request": {
-                "method": "POST",
-                "header": auth("accessToken2") + json_ct(),
-                "body": {"mode": "raw", "raw": '{\n  "currency": "INR"\n}'},
-                "url": "{{walletBaseUrl}}/api/v1/wallets",
-            },
-        },
-        {
-            "name": "3. Get Wallet A",
-            "request": {
-                "method": "GET",
-                "header": auth("accessToken"),
-                "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}",
-            },
-        },
-        {
-            "name": "3b. Get Wallet by User (self)",
-            "request": {
-                "method": "GET",
-                "header": auth("accessToken"),
-                "url": "{{walletBaseUrl}}/api/v1/users/{{userId}}/wallet",
-            },
-        },
-        {
-            "name": "4. Deposit A",
-            "request": {
-                "method": "POST",
-                "header": auth("accessToken")
-                + json_ct()
-                + [{"key": "Idempotency-Key", "value": "{{depositKey}}"}],
-                "body": {"mode": "raw", "raw": '{\n  "amount": "100.00"\n}'},
-                "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/deposits",
-            },
-        },
-        {
-            "name": "5. Transfer A → B",
-            "event": [
-                {
-                    "listen": "test",
-                    "script": {
-                        "type": "text/javascript",
-                        "exec": [
-                            "if (pm.response.code === 200) {",
-                            "  const body = pm.response.json();",
-                            "  if (body.transferId != null) { pm.collectionVariables.set('transferId', String(body.transferId)); pm.environment.set('transferId', String(body.transferId)); }",
-                            "}",
-                        ],
-                    },
-                }
-            ],
-            "request": {
-                "method": "POST",
-                "header": auth("accessToken")
-                + json_ct()
-                + [{"key": "Idempotency-Key", "value": "{{transferKey}}"}],
-                "body": {
-                    "mode": "raw",
-                    "raw": '{\n  "fromWalletId": {{walletId}},\n  "toWalletId": {{walletId2}},\n  "amount": "25.00"\n}',
-                },
-                "url": "{{walletBaseUrl}}/api/v1/transfers",
-            },
-        },
-        {
-            "name": "5b. Get Transfer",
-            "request": {
-                "method": "GET",
-                "header": auth("accessToken"),
-                "url": "{{walletBaseUrl}}/api/v1/transfers/{{transferId}}",
-            },
-        },
-        {
-            "name": "6. Withdraw A",
-            "request": {
-                "method": "POST",
-                "header": auth("accessToken")
-                + json_ct()
-                + [{"key": "Idempotency-Key", "value": "{{withdrawKey}}"}],
-                "body": {"mode": "raw", "raw": '{\n  "amount": "10.00"\n}'},
-                "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/withdrawals",
-            },
-        },
-        {
-            "name": "7. Get Transactions A",
-            "request": {
-                "method": "GET",
-                "header": auth("accessToken"),
-                "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/transactions",
-            },
-        },
-        {
-            "name": "8. Block A",
-            "request": {
-                "method": "POST",
-                "header": auth("accessToken"),
-                "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/block",
-            },
-        },
-        {
-            "name": "9. Unblock A",
-            "request": {
-                "method": "POST",
-                "header": auth("accessToken"),
-                "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/unblock",
-            },
-        },
-        {
-            "name": "Negative cases",
-            "item": [
-                {
-                    "name": "No token (401)",
-                    "request": {
-                        "method": "GET",
-                        "header": [],
-                        "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}",
-                    },
-                },
-                {
-                    "name": "Invalid currency (400)",
-                    "request": {
-                        "method": "POST",
-                        "header": auth("accessToken") + json_ct(),
-                        "body": {"mode": "raw", "raw": '{\n  "currency": "XYZ"\n}'},
-                        "url": "{{walletBaseUrl}}/api/v1/wallets",
-                    },
-                },
-                {
-                    "name": "Insufficient balance (422)",
-                    "request": {
-                        "method": "POST",
-                        "header": auth("accessToken")
-                        + json_ct()
-                        + [{"key": "Idempotency-Key", "value": "withdraw-too-much-001"}],
-                        "body": {"mode": "raw", "raw": '{\n  "amount": "999999.00"\n}'},
-                        "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/withdrawals",
-                    },
-                },
-                {
-                    "name": "Missing Idempotency-Key (400)",
-                    "request": {
-                        "method": "POST",
-                        "header": auth("accessToken") + json_ct(),
-                        "body": {"mode": "raw", "raw": '{\n  "amount": "10.00"\n}'},
-                        "url": "{{walletBaseUrl}}/api/v1/wallets/{{walletId}}/deposits",
-                    },
-                },
-            ],
-        },
-    ]
-
     wallet = {
         "info": {
             "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
             "name": "FinFlow — Wallet Service",
             "description": (
-                "Select environment **FinFlow Local** (shared with Identity).\n\n"
-                "Requires Identity first:\n"
-                "Register → Verify → Login → Create Org → **1b. Login again**\n"
-                "(for transfer: invite flow through **7b** so {{accessToken2}} has wallets:write)\n\n"
-                "All money/read APIs send: Authorization: Bearer {{accessToken}}\n"
-                "URLs use {{walletBaseUrl}} = http://localhost:18082"
+                "Customer folder = shopper UI (CustomerWalletController).\n"
+                "Integration folder = commerce checkout/refunds (IntegrationWalletController).\n\n"
+                "Identity: Register → Verify → Login (JWT needs wallet:read / wallet:write when email is verified).\n\n"
+                "Bearer {{accessToken}} · {{walletBaseUrl}} = http://localhost:18082"
             ),
             "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
         },
@@ -713,12 +707,11 @@ def main(*, identity_only=False) -> None:
             {"key": "userId", "value": ""},
             {"key": "walletId", "value": ""},
             {"key": "walletId2", "value": ""},
-            {"key": "transferId", "value": ""},
+            {"key": "topUpKey", "value": "topup-demo-001"},
             {"key": "depositKey", "value": "deposit-demo-001"},
             {"key": "withdrawKey", "value": "withdraw-demo-001"},
-            {"key": "transferKey", "value": "transfer-demo-001"},
         ],
-        "item": wallet_items,
+        "item": [customer_folder, integration_folder],
     }
 
     # Direct identity checks: gateway may reject the request before identity sees it.

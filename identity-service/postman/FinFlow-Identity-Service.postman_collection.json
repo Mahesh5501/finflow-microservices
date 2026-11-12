@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "FinFlow \u2014 Identity Service",
-    "description": "Select environment **FinFlow Local** (shared with Wallet).\n\nHappy path:\n1. Auth: Register \u2192 Verify Email \u2192 Login\n   (If already registered but unverified: skip Register, run **1b. Resend verification** \u2192 Verify Email \u2192 Login)\n2. Orgs: Create Org \u2192 **1b. Login again** (JWT gets wallets:* permissions)\n3. Switch to Wallet collection \u2014 same {{accessToken}} / {{userId}}\n\nURLs use {{identityBaseUrl}} = http://localhost:18081",
+    "description": "Select environment **FinFlow Local** (shared with Wallet).\n\nHappy path:\n1. Auth: Register \u2192 Verify Email \u2192 Login\n   (If already registered but unverified: skip Register, run **1b. Resend verification** \u2192 Verify Email \u2192 Login)\n2. Optional: Organizations (merchant admins)\n3. Wallet collection \u2014 same {{accessToken}}; shopper APIs need wallet:read / wallet:write on JWT (email verified)\n\nURLs use {{identityBaseUrl}} = http://localhost:18081",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -68,582 +68,560 @@
   ],
   "item": [
     {
-      "name": "Auth",
+      "name": "Auth (auth.api)",
+      "description": "AuthController + JwksController",
       "item": [
         {
-          "name": "0. JWKS (public)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{identityBaseUrl}}/.well-known/jwks.json"
-          }
-        },
-        {
-          "name": "1. Register",
-          "event": [
+          "name": "Public",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "  const body = pm.response.json();",
-                  "  if (body.token) { pm.collectionVariables.set('verificationToken', body.token); pm.environment.set('verificationToken', body.token); }",
-                  "  if (body.profile && body.profile.userId != null) { pm.collectionVariables.set('userId', String(body.profile.userId)); pm.environment.set('userId', String(body.profile.userId)); }",
-                  "}"
-                ]
+              "name": "JWKS",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{identityBaseUrl}}/.well-known/jwks.json"
+              }
+            },
+            {
+              "name": "Register",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const body = pm.response.json();",
+                      "  if (body.token) { pm.collectionVariables.set('verificationToken', body.token); pm.environment.set('verificationToken', body.token); }",
+                      "  if (body.profile && body.profile.userId != null) { pm.collectionVariables.set('userId', String(body.profile.userId)); pm.environment.set('userId', String(body.profile.userId)); }",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+                },
+                "url": "{{identityBaseUrl}}/api/v1/auth/register"
+              }
+            },
+            {
+              "name": "Resend verification",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  const body = pm.response.json();",
+                      "  if (body.token) { pm.collectionVariables.set('verificationToken', body.token); pm.environment.set('verificationToken', body.token); }",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{email}}\"\n}"
+                },
+                "url": "{{identityBaseUrl}}/api/v1/auth/resend-verification"
+              }
+            },
+            {
+              "name": "Verify email",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"token\": \"{{verificationToken}}\"\n}"
+                },
+                "url": "{{identityBaseUrl}}/api/v1/auth/verify-email"
+              }
+            },
+            {
+              "name": "Login",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  const body = pm.response.json();",
+                      "  if (body.accessToken) { pm.collectionVariables.set('accessToken', body.accessToken); pm.environment.set('accessToken', body.accessToken); }",
+                      "  if (body.refreshToken) { pm.collectionVariables.set('refreshToken', body.refreshToken); pm.environment.set('refreshToken', body.refreshToken); }",
+                      "  if (body.userId != null) { pm.collectionVariables.set('userId', String(body.userId)); pm.environment.set('userId', String(body.userId)); }",
+                      "  if (body.permissions) console.log('permissions', body.permissions);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+                },
+                "url": "{{identityBaseUrl}}/api/v1/auth/login"
+              }
+            },
+            {
+              "name": "Refresh",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  const body = pm.response.json();",
+                      "  if (body.accessToken) { pm.collectionVariables.set('accessToken', body.accessToken); pm.environment.set('accessToken', body.accessToken); }",
+                      "  if (body.refreshToken) { pm.collectionVariables.set('refreshToken', body.refreshToken); pm.environment.set('refreshToken', body.refreshToken); }",
+                      "  if (body.userId != null) { pm.collectionVariables.set('userId', String(body.userId)); pm.environment.set('userId', String(body.userId)); }",
+                      "  if (body.permissions) console.log('permissions', body.permissions);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+                },
+                "url": "{{identityBaseUrl}}/api/v1/auth/refresh"
+              }
+            },
+            {
+              "name": "Forgot password",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  const body = pm.response.json();",
+                      "  if (body.token) { pm.collectionVariables.set('resetToken', body.token); pm.environment.set('resetToken', body.token); }",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{email}}\"\n}"
+                },
+                "url": "{{identityBaseUrl}}/api/v1/auth/forgot-password"
+              }
+            },
+            {
+              "name": "Reset password",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"resetToken\": \"{{resetToken}}\",\n  \"newPassword\": \"{{password}}\"\n}"
+                },
+                "url": "{{identityBaseUrl}}/api/v1/auth/reset-password"
+              }
+            },
+            {
+              "name": "Logout",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+                },
+                "url": "{{identityBaseUrl}}/api/v1/auth/logout"
               }
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
-            },
-            "url": "{{identityBaseUrl}}/api/v1/auth/register"
-          }
+          ]
         },
         {
-          "name": "1b. Resend verification",
-          "event": [
+          "name": "Authenticated",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "  const body = pm.response.json();",
-                  "  if (body.token) { pm.collectionVariables.set('verificationToken', body.token); pm.environment.set('verificationToken', body.token); }",
-                  "}"
-                ]
+              "name": "Me",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": "{{identityBaseUrl}}/api/v1/users/me"
+              }
+            },
+            {
+              "name": "Change password",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"currentPassword\": \"{{password}}\",\n  \"newPassword\": \"{{password}}\"\n}"
+                },
+                "url": "{{identityBaseUrl}}/api/v1/auth/change-password"
               }
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\"\n}"
-            },
-            "url": "{{identityBaseUrl}}/api/v1/auth/resend-verification"
-          }
-        },
-        {
-          "name": "2. Verify Email",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"token\": \"{{verificationToken}}\"\n}"
-            },
-            "url": "{{identityBaseUrl}}/api/v1/auth/verify-email"
-          }
-        },
-        {
-          "name": "3. Login",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "  const body = pm.response.json();",
-                  "  if (body.accessToken) { pm.collectionVariables.set('accessToken', body.accessToken); pm.environment.set('accessToken', body.accessToken); }",
-                  "  if (body.refreshToken) { pm.collectionVariables.set('refreshToken', body.refreshToken); pm.environment.set('refreshToken', body.refreshToken); }",
-                  "  if (body.userId != null) { pm.collectionVariables.set('userId', String(body.userId)); pm.environment.set('userId', String(body.userId)); }",
-                  "  if (body.permissions) console.log('permissions', body.permissions);",
-                  "}"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
-            },
-            "url": "{{identityBaseUrl}}/api/v1/auth/login"
-          }
-        },
-        {
-          "name": "4. Me",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}"
-              }
-            ],
-            "url": "{{identityBaseUrl}}/api/v1/users/me"
-          }
-        },
-        {
-          "name": "5. Refresh",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "  const body = pm.response.json();",
-                  "  if (body.accessToken) { pm.collectionVariables.set('accessToken', body.accessToken); pm.environment.set('accessToken', body.accessToken); }",
-                  "  if (body.refreshToken) { pm.collectionVariables.set('refreshToken', body.refreshToken); pm.environment.set('refreshToken', body.refreshToken); }",
-                  "  if (body.userId != null) { pm.collectionVariables.set('userId', String(body.userId)); pm.environment.set('userId', String(body.userId)); }",
-                  "  if (body.permissions) console.log('permissions', body.permissions);",
-                  "}"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
-            },
-            "url": "{{identityBaseUrl}}/api/v1/auth/refresh"
-          }
-        },
-        {
-          "name": "6. Forgot Password",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "  const body = pm.response.json();",
-                  "  if (body.token) { pm.collectionVariables.set('resetToken', body.token); pm.environment.set('resetToken', body.token); }",
-                  "}"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\"\n}"
-            },
-            "url": "{{identityBaseUrl}}/api/v1/auth/forgot-password"
-          }
-        },
-        {
-          "name": "7. Reset Password",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"resetToken\": \"{{resetToken}}\",\n  \"newPassword\": \"{{password}}\"\n}"
-            },
-            "url": "{{identityBaseUrl}}/api/v1/auth/reset-password"
-          }
-        },
-        {
-          "name": "8. Change Password",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"currentPassword\": \"{{password}}\",\n  \"newPassword\": \"{{password}}\"\n}"
-            },
-            "url": "{{identityBaseUrl}}/api/v1/auth/change-password"
-          }
-        },
-        {
-          "name": "9. Logout",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
-            },
-            "url": "{{identityBaseUrl}}/api/v1/auth/logout"
-          }
+          ]
         }
       ]
     },
     {
-      "name": "Organisations",
+      "name": "Organizations (organization.api)",
+      "description": "OrgController \u2014 /api/v1/orgs/**",
       "item": [
         {
-          "name": "1. Create Org",
-          "event": [
+          "name": "Org",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "  const body = pm.response.json();",
-                  "  if (body.orgId != null) { pm.collectionVariables.set('orgId', String(body.orgId)); pm.environment.set('orgId', String(body.orgId)); }",
-                  "}"
-                ]
+              "name": "Create org",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const body = pm.response.json();",
+                      "  if (body.orgId != null) { pm.collectionVariables.set('orgId', String(body.orgId)); pm.environment.set('orgId', String(body.orgId)); }",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Acme Finance\"\n}"
+                },
+                "url": "{{identityBaseUrl}}/api/v1/orgs"
+              }
+            },
+            {
+              "name": "List my orgs",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": "{{identityBaseUrl}}/api/v1/orgs"
+              }
+            },
+            {
+              "name": "Get org",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}"
               }
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Acme Finance\"\n}"
-            },
-            "url": "{{identityBaseUrl}}/api/v1/orgs"
-          }
+          ]
         },
         {
-          "name": "1b. Login again (wallet permissions in JWT)",
-          "event": [
+          "name": "Members & invites",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "  const body = pm.response.json();",
-                  "  if (body.accessToken) { pm.collectionVariables.set('accessToken', body.accessToken); pm.environment.set('accessToken', body.accessToken); }",
-                  "  if (body.refreshToken) { pm.collectionVariables.set('refreshToken', body.refreshToken); pm.environment.set('refreshToken', body.refreshToken); }",
-                  "  if (body.userId != null) { pm.collectionVariables.set('userId', String(body.userId)); pm.environment.set('userId', String(body.userId)); }",
-                  "  if (body.permissions) console.log('permissions', body.permissions);",
-                  "}"
-                ]
+              "name": "Invite member",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const body = pm.response.json();",
+                      "  if (body.token) { pm.collectionVariables.set('inviteToken', body.token); pm.environment.set('inviteToken', body.token); }",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{memberEmail}}\",\n  \"role\": \"FINANCE_OPERATOR\"\n}"
+                },
+                "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/invites"
+              }
+            },
+            {
+              "name": "Accept invite (member Bearer)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken2}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"token\": \"{{inviteToken}}\"\n}"
+                },
+                "url": "{{identityBaseUrl}}/api/v1/orgs/invites/accept"
+              }
+            },
+            {
+              "name": "List members",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/members"
+              }
+            },
+            {
+              "name": "Change member role",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"role\": \"MEMBER\"\n}"
+                },
+                "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/members/{{userId2}}/role"
+              }
+            },
+            {
+              "name": "Remove member",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/members/{{userId2}}"
               }
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
-            },
-            "url": "{{identityBaseUrl}}/api/v1/auth/login"
-          }
+          ]
         },
         {
-          "name": "2. List My Orgs",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}"
-              }
-            ],
-            "url": "{{identityBaseUrl}}/api/v1/orgs"
-          }
-        },
-        {
-          "name": "3. Register Member (user B)",
-          "event": [
+          "name": "Audit",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "  const body = pm.response.json();",
-                  "  if (body.token) { pm.collectionVariables.set('verificationToken', body.token); pm.environment.set('verificationToken', body.token); }",
-                  "  if (body.profile && body.profile.userId != null) { pm.collectionVariables.set('userId2', String(body.profile.userId)); pm.environment.set('userId2', String(body.profile.userId)); }",
-                  "}"
-                ]
+              "name": "Org audit log",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/audit"
               }
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{memberEmail}}\",\n  \"password\": \"{{memberPassword}}\"\n}"
-            },
-            "url": "{{identityBaseUrl}}/api/v1/auth/register"
-          }
+          ]
         },
         {
-          "name": "4. Verify Member Email",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"token\": \"{{verificationToken}}\"\n}"
-            },
-            "url": "{{identityBaseUrl}}/api/v1/auth/verify-email"
-          }
-        },
-        {
-          "name": "5. Invite Member",
-          "event": [
+          "name": "Demo \u2014 second user (optional)",
+          "description": "Registers {{memberEmail}}, logs in as member, then run Members & invites.",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "  const body = pm.response.json();",
-                  "  if (body.token) { pm.collectionVariables.set('inviteToken', body.token); pm.environment.set('inviteToken', body.token); }",
-                  "}"
-                ]
+              "name": "Register member (user B)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const body = pm.response.json();",
+                      "  if (body.token) { pm.collectionVariables.set('verificationToken', body.token); pm.environment.set('verificationToken', body.token); }",
+                      "  if (body.profile && body.profile.userId != null) { pm.collectionVariables.set('userId2', String(body.profile.userId)); pm.environment.set('userId2', String(body.profile.userId)); }",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{memberEmail}}\",\n  \"password\": \"{{memberPassword}}\"\n}"
+                },
+                "url": "{{identityBaseUrl}}/api/v1/auth/register"
+              }
+            },
+            {
+              "name": "Verify member email",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"token\": \"{{verificationToken}}\"\n}"
+                },
+                "url": "{{identityBaseUrl}}/api/v1/auth/verify-email"
+              }
+            },
+            {
+              "name": "Member login",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  const body = pm.response.json();",
+                      "  if (body.accessToken) { pm.collectionVariables.set('accessToken2', body.accessToken); pm.environment.set('accessToken2', body.accessToken); }",
+                      "  if (body.refreshToken) { pm.collectionVariables.set('refreshToken2', body.refreshToken); pm.environment.set('refreshToken2', body.refreshToken); }",
+                      "  if (body.userId != null) { pm.collectionVariables.set('userId2', String(body.userId)); pm.environment.set('userId2', String(body.userId)); }",
+                      "  if (body.permissions) console.log('permissions', body.permissions);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{memberEmail}}\",\n  \"password\": \"{{memberPassword}}\"\n}"
+                },
+                "url": "{{identityBaseUrl}}/api/v1/auth/login"
               }
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{memberEmail}}\",\n  \"role\": \"FINANCE_OPERATOR\"\n}"
-            },
-            "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/invites"
-          }
-        },
-        {
-          "name": "6. Member Login (before accept)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "  const body = pm.response.json();",
-                  "  if (body.accessToken) { pm.collectionVariables.set('accessToken2', body.accessToken); pm.environment.set('accessToken2', body.accessToken); }",
-                  "  if (body.refreshToken) { pm.collectionVariables.set('refreshToken2', body.refreshToken); pm.environment.set('refreshToken2', body.refreshToken); }",
-                  "  if (body.userId != null) { pm.collectionVariables.set('userId2', String(body.userId)); pm.environment.set('userId2', String(body.userId)); }",
-                  "  if (body.permissions) console.log('permissions', body.permissions);",
-                  "}"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{memberEmail}}\",\n  \"password\": \"{{memberPassword}}\"\n}"
-            },
-            "url": "{{identityBaseUrl}}/api/v1/auth/login"
-          }
-        },
-        {
-          "name": "7. Accept Invite (as member)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken2}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"token\": \"{{inviteToken}}\"\n}"
-            },
-            "url": "{{identityBaseUrl}}/api/v1/orgs/invites/accept"
-          }
-        },
-        {
-          "name": "7b. Member Login again (wallet permissions \u2192 accessToken2)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "  const body = pm.response.json();",
-                  "  if (body.accessToken) { pm.collectionVariables.set('accessToken2', body.accessToken); pm.environment.set('accessToken2', body.accessToken); }",
-                  "  if (body.refreshToken) { pm.collectionVariables.set('refreshToken2', body.refreshToken); pm.environment.set('refreshToken2', body.refreshToken); }",
-                  "  if (body.userId != null) { pm.collectionVariables.set('userId2', String(body.userId)); pm.environment.set('userId2', String(body.userId)); }",
-                  "  if (body.permissions) console.log('permissions', body.permissions);",
-                  "}"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{memberEmail}}\",\n  \"password\": \"{{memberPassword}}\"\n}"
-            },
-            "url": "{{identityBaseUrl}}/api/v1/auth/login"
-          }
-        },
-        {
-          "name": "8. List Members",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}"
-              }
-            ],
-            "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/members"
-          }
-        },
-        {
-          "name": "9. Change Member Role",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"role\": \"MEMBER\"\n}"
-            },
-            "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/members/{{userId2}}/role"
-          }
-        },
-        {
-          "name": "10. Org Audit Log",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}"
-              }
-            ],
-            "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/audit"
-          }
-        },
-        {
-          "name": "11. Remove Member",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}"
-              }
-            ],
-            "url": "{{identityBaseUrl}}/api/v1/orgs/{{orgId}}/members/{{userId2}}"
-          }
+          ]
         }
       ]
     },

@@ -52,11 +52,11 @@ Commerce uses feature-first api -> application -> persistence/domain packages; o
 
 ### Wallet movement
 
-WalletController obtains owner from JWT, not request body. SecurityConfig checks wallets:read/write or transfers:create. WalletService checks ownership for reads/mutations and party membership for transfer reads.
+Wallet controllers obtain the owner from JWT, not the request body. SecurityConfig checks configured `wallet:read` / `wallet:write` on GET/POST. WalletService checks ownership for reads and mutations.
 
 Deposit/withdraw use a local transaction: owned wallet -> global history-key lookup -> credit/debit -> wallet save -> history saveAndFlush. Wallet enforces ACTIVE, positive amount and sufficient balance; current balance normalizes to 2 decimals. Transfer checks global transfer-key replay, sender ownership, different wallet and same currency, debits/credits both, saves transfer and SENT/RECEIVED history in one transaction. Wallet @Version detects conflicting updates; unique keys constrain duplicates. Sequential replay is tested; scope and concurrent replay limitations are R2/R11.
 
-Wallet lifecycle: ACTIVE <-> BLOCKED; ACTIVE/BLOCKED -> CLOSED only at zero balance; CLOSED cannot reopen. A wallet owner with wallets:write can block/unblock their own wallet. Funding/deposit is a direct API operation, not proof of an external payment received.
+Wallet lifecycle statuses ACTIVE / BLOCKED / CLOSED exist in the domain (money moves only when ACTIVE). HTTP block/unblock/close and P2P transfer endpoints are not exposed in the e-commerce product; top-up is the shopper load path; deposit/withdraw serve commerce refunds and checkout debits.
 
 ### Commerce feature architecture (2026-11-11)
 
@@ -112,18 +112,15 @@ Public GET **/.well-known/jwks.json** returns current RSA key. Authenticated POS
 
 ### Wallet
 
-GETs require wallets:read; POSTs wallets:write except transfer requires transfers:create. Owner/party checks are additional.
+GETs require `wallet:read`; POSTs require `wallet:write`. Owner checks are additional on wallet-id paths; `/customer/wallet` resolves the caller from JWT.
 
 | Method/path | Behaviour |
 |---|---|
-| POST /wallets | currency INR/USD/EUR/GBP, case-insensitive -> 201 zero wallet for caller; one per user |
-| GET /wallets/{walletId} | Owner-only balance/status |
-| GET /users/{userId}/wallet | Path user must equal caller |
-| POST /wallets/{walletId}/deposits; /withdrawals | amount, required Idempotency-Key -> transaction response with replay flag; positive, <=1,000,000.00, <=2 decimal places at HTTP boundary |
-| GET /wallets/{walletId}/transactions | Full newest-first statement |
-| POST /wallets/{walletId}/block; /unblock; /close | Owner status change; close needs zero |
-| POST /transfers | fromWalletId/toWalletId/amount + required Idempotency-Key -> transfer and balance snapshots; sender owned, equal currencies |
-| GET /transfers/{transferId} | Sender or recipient owner only |
+| GET/POST /api/v1/customer/wallet/** | Customer-facing balance, open, top-up, history (any app) |
+| GET /wallets/{walletId} | Owner-only balance/status (integration/tools) |
+| GET /users/{userId}/wallet | Path user must equal caller (commerce lookup) |
+| POST /wallets/{walletId}/deposits; /withdrawals | amount, required Idempotency-Key (commerce) |
+| GET /wallets/{walletId}/transactions | Full newest-first statement (optional tools) |
 
 ### Commerce
 
@@ -133,7 +130,7 @@ The current routes use `/api/v1/customer/**` and `/api/v1/merchant/**`, preserve
 
 Authenticated GET **/api/v1/notifications/me** returns caller's full newest-first inbox. No REST notification-create/mark-read/retry endpoints exist.
 
-Gateway preserves downstream paths. Routes: /api/v1/users/me -> identity; /api/v1/users/*/wallet -> wallet; /api/v1/auth/**, /api/v1/orgs/** and JWKS -> identity; /api/v1/wallets/** and /api/v1/transfers/** -> wallet; commerce path families above -> commerce; /api/v1/notifications/** -> notification.
+Gateway preserves downstream paths. Routes: /api/v1/users/me -> identity; /api/v1/users/*/wallet and /api/v1/customer/wallet/** -> wallet; /api/v1/auth/**, /api/v1/orgs/** and JWKS -> identity; /api/v1/wallets/** -> wallet; commerce path families above -> commerce; /api/v1/notifications/** -> notification.
 
 Gateway default route filters configure Redis token bucket 50/s with burst 100, 1 MB body limit and deduped CORS headers. Each route has circuit breaker fallback **/fallback/{service}** (503 UPSTREAM_UNAVAILABLE), GET-only retry twice on 502/503/504, 2 s connect and 5 s response/time-limiter defaults. Non-GET money/auth operations are not retried by this configuration. The unused app.max-body-bytes binding was removed during cleanup; active RequestSize remains the literal 1MB in YAML. HTTP timeout properties are consumed directly by YAML, without a duplicate typed Http binding.
 

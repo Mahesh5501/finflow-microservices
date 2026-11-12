@@ -1,59 +1,27 @@
-# Postman — FinFlow (all services)
+# Wallet Service — Postman
 
-## Import
+Import `FinFlow-Wallet-Service.postman_collection.json` and environment **`FinFlow Local`** from `postman/FinFlow-Local.postman_environment.json`.
 
-1. `postman/FinFlow-Local.postman_environment.json` → select **FinFlow Local** (top-right)
-2. `identity-service/postman/FinFlow-Identity-Service.postman_collection.json`
-3. `wallet-service/postman/FinFlow-Wallet-Service.postman_collection.json`
-4. `commerce-service/postman/FinFlow-Commerce-Service.postman_collection.json`
-5. `notification-service/postman/FinFlow-Notification-Service.postman_collection.json`
-6. `api-gateway/postman/FinFlow-API-Gateway.postman_collection.json` (edge smoke)
+## Collection layout (matches code)
 
-Delete old copies first if Postman still has stale URLs/headers.
+| Folder | Controller | Base path |
+|--------|------------|-----------|
+| **Customer** | `CustomerWalletController` | `/api/v1/customer/wallet/**` |
+| **Integration** | `IntegrationWalletController` | `/api/v1/users/{id}/wallet`, `/api/v1/wallets/{id}/**` |
 
-## Shared variables (environment)
+Shopper flows (open wallet, top-up, my transactions) live under **Customer**. Commerce checkout (withdraw) and refunds (deposit) live under **Integration**.
 
-| Variable | Meaning |
-|----------|---------|
-| `gatewayBaseUrl` | `http://localhost:18080` |
-| `identityBaseUrl` | `http://localhost:18081` |
-| `walletBaseUrl` | `http://localhost:18082` |
-| `commerceBaseUrl` | `http://localhost:18083` |
-| `notificationBaseUrl` | `http://localhost:18084` |
-| `accessToken` | User A JWT (Identity Login / 1b) |
-| `accessToken2` | User B JWT (Member Login 7b) |
-| `userId` / `userId2` | From login responses |
-| `orgId` | From Create Org |
-| `walletId` / `walletId2` | From Create Wallet A/B |
-| `productId` / `orderId` / `returnId` | Filled by Commerce test scripts |
+## Prerequisites
 
-## Order
+1. Identity: Register → Verify email → Login  
+2. JWT should include `wallet:read` and `wallet:write` (verified consumer — see `docs/PERMISSIONS.md`)  
+3. Run **Customer → Open wallet** so `{{walletId}}` is set for integration calls  
 
-**Identity**
+## Idempotency
 
-1. Register → Verify Email → Login  
-2. Create Org → **1b. Login again** (JWT must include `wallets:read/write`)  
-3. (For transfer) Register Member → Verify → Invite → Member Login → Accept Invite → **7b. Member Login again**
+Top-up, deposit, and withdraw require `Idempotency-Key` (collection vars: `topUpKey`, `depositKey`, `withdrawKey`).
 
-**Wallet**
-
-1. Create Wallet A (`Bearer {{accessToken}}`)  
-2. Deposit → Transfer → Withdraw → history  
-
-**Commerce**
-
-1. Catalogue (category → product) → optional Coupon  
-2. Cart checkout **or** Orders create → Pay / Fulfilment → Returns  
-
-**Notification**
-
-1. List My Notifications (after commerce events + Kafka)
-
-**Gateway**
-
-Edge GETs for the same paths via `:18080` (Redis required for rate limit).
-
-## Regenerate JSON
+## Regenerate
 
 ```bash
 cd postman && python _gen_collections.py

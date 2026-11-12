@@ -1,0 +1,40 @@
+package com.finflow.identity.organization.domain;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.Getter;
+
+import java.time.Instant;
+
+/**
+ * Organisation workspace used by memberships and commerce access.
+ * Wallets remain user-owned; this entity does not change wallet ownership.
+ */
+@Getter
+@Entity
+@Table(name = "organisation") // keep existing table name if DB already created
+public class Org {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "org_id")
+    private Long id;
+
+    @Column(name = "name", nullable = false, length = 120)
+    private String name;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    protected Org() {
+    }
+
+    public Org(String name) {
+        this.name = name;
+        this.createdAt = Instant.now();
+    }
+}

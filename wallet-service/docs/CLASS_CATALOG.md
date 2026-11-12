@@ -6,15 +6,11 @@ Interview deep-dive: see [`INTERVIEW_GUIDE.md`](./INTERVIEW_GUIDE.md).
 
 | API | Purpose |
 |---|---|
-| POST `/api/v1/wallets` | Create |
-| GET `/api/v1/wallets/{walletId}` | Get by id |
-| GET `/api/v1/users/{userId}/wallet` | Get by user |
-| POST `.../deposits` | Deposit + idempotency |
-| POST `.../withdrawals` | Withdraw + idempotency |
-| GET `.../transactions` | History |
-| POST `/api/v1/transfers` | Transfer A→B |
-| GET `/api/v1/transfers/{transferId}` | Get transfer |
-| POST `.../block` `/unblock` `/close` | Status |
+| `/api/v1/customer/wallet/**` | Shopper API (any app) |
+| GET `/api/v1/users/{userId}/wallet` | Integration lookup |
+| GET `/api/v1/wallets/{walletId}` | Integration read |
+| POST `.../deposits` / `.../withdrawals` | Commerce refund / checkout debit |
+| GET `.../transactions` | History by wallet id |
 
 Tables: `wallet`, `wallet_history`, `wallet_transfer`
 

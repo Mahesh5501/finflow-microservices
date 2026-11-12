@@ -151,7 +151,7 @@ sequenceDiagram
 3. **Find the route:** The wallet path selects wallet.uri, currently localhost:18082. The original API path is preserved.
 4. **Run route filters:** Add/propagate a correlation ID, apply response-header deduplication, request-size checks and Redis rate limiting.
 5. **Protect the downstream call:** CircuitBreaker wraps Retry and downstream forwarding. A normal call is forwarded once; eligible GET failures can trigger additional attempts.
-6. **Let wallet-service decide access:** The bearer token is forwarded. Wallet checks wallets:read and whether the wallet belongs to the user.
+6. **Let wallet-service decide access:** The bearer token is forwarded. Wallet checks configured `wallet:read` and whether the wallet belongs to the user.
 7. **Return:** Gateway forwards the service response. Its logging currently runs per downstream attempt, not as a complete final client-request log.
 
 JWKS uses key caching; this is not an identity HTTP call for every normal request. The gateway does not call identity's login endpoint to validate every token.
@@ -198,8 +198,7 @@ All example API paths below include /api/v1.
 | /users/me | identity-service |
 | /auth/**, /orgs/** | identity-service |
 | /.well-known/jwks.json (absolute path, no /api/v1 prefix) | identity-service |
-| /users/{userId}/wallet | wallet-service |
-| /wallets/**, /transfers/** | wallet-service |
+| /customer/wallet/**, /users/{userId}/wallet, /wallets/** | wallet-service |
 | /products/**, /categories/**, /carts/**, /coupons/**, /orders/**, /returns/** | commerce-service |
 | /notifications/** | notification-service |
 

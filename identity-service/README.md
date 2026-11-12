@@ -25,11 +25,13 @@ sequenceDiagram
     AuthService-->>User: UserProfileResponse
 ```
 
-| Role | Permissions in JWT (union across active memberships) |
+| Scope | Permissions |
 |---|---|
-| ORG_ADMIN | `org:manage`, `members:manage`, `wallets:read`, `wallets:write`, `transfers:create`, `commerce:read`, `commerce:write` |
-| FINANCE_OPERATOR | `wallets:read`, `wallets:write`, `transfers:create`, `commerce:read`, `commerce:write` |
-| MEMBER | `wallets:read`, `wallets:write`, `commerce:read`, `commerce:write` |
+| **Every verified user** (platform consumer) | Config: `identity.authorization.verified-consumer` (comma list, e.g. `wallet:read,wallet:write,...`) |
+| ORG_ADMIN / FINANCE_OPERATOR / MEMBER | Config: `identity.authorization.org-role.<ROLE>` |
+
+Package layout (same style as commerce): [PACKAGE-STRUCTURE.md](PACKAGE-STRUCTURE.md).  
+Permissions: [../docs/PERMISSIONS.md](../docs/PERMISSIONS.md) and [docs/AUTHORIZATION.md](docs/AUTHORIZATION.md) — lists are **not** hard-coded in Java.
 
 Reviewed 2026-11-07 starting at HEAD d878dd7 plus the existing working tree; final Git HEAD is d499559 after an external gateway commit. The API inventory is a source-based review; the first security-response improvement below is now implemented. This does not establish production readiness. Gateway work is preserved. No endpoints have been removed or renamed.
 
