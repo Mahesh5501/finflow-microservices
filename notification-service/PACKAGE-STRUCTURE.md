@@ -1,24 +1,31 @@
 # Notification service — package layout
 
-Aligned with commerce **integration** and feature modules.
+Rooted at `com.finflow.notification`. Matches commerce-style **feature + integration** modules.
 
-## Modules
-
-| Module | Package | Responsibility |
-|--------|---------|----------------|
-| **notification** | `com.finflow.notification.notification` | Inbox records, HTTP API, dispatch |
-| **integration.event** | `com.finflow.notification.integration.event` | Commerce event DTOs |
-| **integration.kafka** | `com.finflow.notification.integration.kafka` | Optional Kafka consumer |
-| **integration.mail** | `com.finflow.notification.integration.mail` | Email channel |
-| **security** | `com.finflow.notification.security` | JWT/JWKS |
-
-## Notification feature layers
-
+```text
+com.finflow.notification
+|-- NotificationServiceApplication
+|-- notification/
+|   |-- api: NotificationController
+|   |-- application: NotificationDispatcher
+|   |-- domain: NotificationRecord, NotificationStatus
+|   |-- persistence: NotificationRecordRepository
+|   `-- dto: NotificationResponse
+|-- integration/
+|   |-- event: CommerceDomainEvent, CommerceEventType
+|   |-- kafka: CommerceEventListener, KafkaConsumerConfig, KafkaEnableConfig
+|   `-- mail: MailChannel
+`-- security: SecurityConfig, JwtAuthFilter, JwksKeyProvider, AuthenticatedUser
 ```
-notification/
-  api/            → NotificationController
-  application/    → NotificationDispatcher
-  domain/         → NotificationRecord, NotificationStatus
-  persistence/    → NotificationRecordRepository
-  dto/            → NotificationResponse
-```
+
+| Package role | Responsibility |
+|--------------|----------------|
+| `notification.api` | HTTP inbox API (`/api/v1/notifications/**`) |
+| `notification.application` | Persist + dispatch notifications |
+| `integration.kafka` | Optional commerce event consumer |
+| `integration.mail` | Email channel stub |
+| `security` | JWT resource server (same pattern as identity/wallet/commerce) |
+
+Tests live under `notification.application` (e.g. `NotificationDispatcherTest`).
+
+Legacy flat packages (`controller`, `service`, `entity`, `repository`, root `kafka`, `mail`, `event`) are removed — use the modules above only.

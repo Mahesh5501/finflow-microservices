@@ -1,5 +1,5 @@
 
-package com.finflow.apigateway.error;
+package com.finflow.apigateway.gateway.error;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,12 +21,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
 
-/**
- * Converts unhandled API Gateway exceptions into a consistent JSON response.
- *
- * This handler covers exceptions reaching the gateway's global error handling.
- * Downstream responses and filters that have already written their own response are not rewritten here.
- */
 @Slf4j
 @Component
 @Order(-2)
@@ -49,7 +43,6 @@ public class GlobalErrorConfig implements ErrorWebExceptionHandler {
 
         ServerHttpResponse response = exchange.getResponse();
 
-        // A committed response cannot safely be replaced with a new error body.
         if (response.isCommitted()) {
             return Mono.error(ex);
         }
@@ -68,43 +61,28 @@ public class GlobalErrorConfig implements ErrorWebExceptionHandler {
         return writeJson(response, body);
     }
 
-    /**
-     * Serializes the error response without blocking the reactive pipeline.
-     * A small static JSON response is used if serialization itself fails.
-     */
     private Mono<Void> writeJson(ServerHttpResponse response, Map<String, Object> body) {
         try {
             byte[] bytes = objectMapper.writeValueAsBytes(body);
             DataBuffer buffer = response.bufferFactory().wrap(bytes);
             return response.writeWith(Mono.just(buffer));
         } catch (JsonProcessingException e) {
-            // Keep the response writable even if JSON serialization fails.
             byte[] bytes = "{\"code\":\"GATEWAY_ERROR\",\"message\":\"Unexpected error\"}"
                     .getBytes(StandardCharsets.UTF_8);
             return response.writeWith(Mono.just(response.bufferFactory().wrap(bytes)));
         }
     }
 
-    /**
-     * Maps known exception types to HTTP status codes.
-     * Unknown or unsupported status codes safely become HTTP 500.
-     */
     private static HttpStatus resolveStatus(Throwable ex) {
-
         if (ex instanceof ResponseStatusException rse) {
             HttpStatus resolved = HttpStatus.resolve(rse.getStatusCode().value());
-
             return resolved != null ? resolved : HttpStatus.INTERNAL_SERVER_ERROR;
         }
-
-        // A timeout may be wrapped by one or more reactive exceptions.
         Throwable current = ex;
-
         while (current != null) {
             if (current instanceof TimeoutException) {
                 return HttpStatus.GATEWAY_TIMEOUT;
             }
-
             current = current.getCause();
         }
         return HttpStatus.INTERNAL_SERVER_ERROR;

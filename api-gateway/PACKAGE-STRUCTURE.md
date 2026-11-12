@@ -1,16 +1,19 @@
 # API gateway — package layout
 
-Spring Cloud Gateway (WebFlux). Smaller surface than MVC services — packages group **infrastructure**, not domain features.
+Rooted at `com.finflow.apigateway` (reactive Spring Cloud Gateway). Same **feature module** idea as commerce: a `gateway` module for edge behaviour, plus `security` for JWT.
 
-| Package | Responsibility |
-|---------|----------------|
-| `config` | Routes, `GatewayProperties`, Redis |
-| `filter` | Correlation ID, access logging |
-| `security` | OAuth2 resource server / JWT (reactive) |
-| `ratelimit` | Redis rate limiting |
-| `fallback` | Circuit-breaker fallback responses |
-| `error` | Global error handling |
+```text
+com.finflow.apigateway
+|-- ApiGatewayApplication
+|-- gateway/
+|   |-- api: FallbackController
+|   |-- config: GatewayConfig, GatewayProperties
+|   |-- filter: CorrelationIdFilter, AccessLogFilter
+|   |-- error: GlobalErrorConfig
+|   `-- ratelimit: RateLimitConfig
+`-- security: SecurityConfig
+```
 
-No `api/application/domain` split — the gateway proxies HTTP and does not own business entities.
+There is no `domain` / `persistence` layer — the gateway proxies HTTP and owns no business entities. Tests mirror `gateway.error` and `gateway.ratelimit`.
 
-See route targets in `src/main/resources/application.yml` (identity, wallet, commerce, notification).
+Routes and resilience settings live in `src/main/resources/application.yml`.

@@ -1,4 +1,4 @@
-package com.finflow.apigateway.error;
+package com.finflow.apigateway.gateway.error;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;

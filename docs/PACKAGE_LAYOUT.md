@@ -8,6 +8,6 @@ Common pattern for MVC microservices: **feature module** + **`api` / `applicatio
 | wallet-service | [PACKAGE-STRUCTURE.md](../wallet-service/PACKAGE-STRUCTURE.md) | `wallet` feature; `api/customer` + `api/integration` |
 | commerce-service | [PACKAGE-STRUCTURE.md](../commerce-service/PACKAGE-STRUCTURE.md) | `cart`, `order`, `catalogue`, … |
 | notification-service | [PACKAGE-STRUCTURE.md](../notification-service/PACKAGE-STRUCTURE.md) | `notification` + `integration.*` |
-| api-gateway | [PACKAGE-STRUCTURE.md](../api-gateway/PACKAGE-STRUCTURE.md) | reactive gateway; config/filter/security |
+| api-gateway | [PACKAGE-STRUCTURE.md](../api-gateway/PACKAGE-STRUCTURE.md) | `gateway` module (api/config/filter/error/ratelimit) + `security` |
 
 Permissions across services: [PERMISSIONS.md](PERMISSIONS.md).

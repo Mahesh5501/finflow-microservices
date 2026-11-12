@@ -1,4 +1,4 @@
-package com.finflow.apigateway.config;
+package com.finflow.apigateway.gateway.config;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -19,7 +19,6 @@ import java.util.List;
 @Getter
 public class GatewayProperties {
 
-    // @Valid enables validation of the nested configuration objects.
     @Valid
     private final RateLimit rateLimit = new RateLimit();
 
@@ -29,7 +28,6 @@ public class GatewayProperties {
     @Getter
     @Setter
     public static class RateLimit {
-        // Tokens restored each second, maximum saved tokens, and cost per request.
         @Min(1)
         private int replenishRate = 50;
 
@@ -43,7 +41,6 @@ public class GatewayProperties {
     @Getter
     @Setter
     public static class Cors {
-        // Local defaults allow any origin. Production origins need an explicit policy.
         @NotEmpty
         private List<String> allowedOrigins = List.of("*");
 

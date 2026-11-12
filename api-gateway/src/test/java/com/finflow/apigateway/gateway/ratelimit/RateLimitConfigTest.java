@@ -1,5 +1,5 @@
 
-package com.finflow.apigateway.ratelimit;
+package com.finflow.apigateway.gateway.ratelimit;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
